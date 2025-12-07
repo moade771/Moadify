@@ -29,4 +29,5 @@ A simple open source music player. With user friendly interface and a lot of oth
 - Secure local file access only
 - 100% offline-first (no streaming required)
 - Lightweight and low RAM usage
+- Real-time Discord activity status while listening to music
 
