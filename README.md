@@ -31,3 +31,16 @@ A simple open source music player. With user friendly interface and a lot of oth
 - Lightweight and low RAM usage
 - Shows your listening activity on Discord in real time
 
+## Using the source code
+
+- 1 . Clone the repository
+```git clone https://github.com/moade771/Moadify.git```
+
+- 2 . Move into the project folder
+```cd Moadify```
+
+- 3 . Install dependencies
+```npm install```
+
+- 4 . Start the app
+```npm start```
