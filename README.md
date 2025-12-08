@@ -16,11 +16,11 @@ A simple open source music player. With user friendly interface and a lot of oth
     
 ## Screenshots
 
-![App Screenshot](https://i.ibb.co/BVJnNqHr/1.png/468x300?)
+![App Screenshot](https://i.ibb.co/6012FkR3/1.png/468x300?)
 
-![App Screenshot](https://i.ibb.co/JWjzHb0w/2.png/468x300?)
+![App Screenshot](https://i.ibb.co/1JLFF3ST/2.png/468x300?)
 
-![App Screenshot](https://i.ibb.co/xtgSLnpG/3.png/468x300?)
+![App Screenshot](https://i.ibb.co/sdkp5bnV/3.png/468x300?)
 
 ## Features
 
