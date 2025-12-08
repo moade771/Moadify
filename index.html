@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moadify</title>
+    <link rel="icon" type="image/x-icon" href="icon.ico">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- Custom Title Bar -->
+    <div id="title-bar">
+        <div id="app-title">Moadify</div>
+        <div id="window-controls">
+            <button id="min-btn" class="control-btn" title="Minimize">&minus;</button>
+            <button id="max-btn" class="control-btn" title="Maximize">&#9633;</button>
+            <button id="close-btn" class="control-btn" title="Close">&times;</button>
+        </div>
+    </div>
+
+    <div id="app-layout">
+        <!-- Sidebar -->
+        <div id="sidebar">
+            <div class="nav-section">
+                <button class="nav-btn active" data-view="home">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                    </svg>
+                    Home
+                </button>
+                <button class="nav-btn" data-view="library">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                    </svg>
+                    Library
+                </button>
+            </div>
+
+            <div class="nav-section playlists-section">
+                <div class="section-header">
+                    <span>PLAYLISTS</span>
+                    <button id="create-playlist-btn" title="Create Playlist">+</button>
+                </div>
+                <div id="playlist-list">
+                    <!-- Playlists go here -->
+                </div>
+            </div>
+
+            <div class="nav-section mt-auto">
+                <button class="nav-btn" data-view="settings">
+                    <svg width="24" height="24" viewBox="0 0 569.16 569.16" fill="currentColor">
+                        <path
+                            d="M513.217,216.366c-18.427,0-31.318-4.568-34.492-12.218c-3.17-7.647,2.702-19.982,15.704-32.999l33.109-33.109l6.493-6.493l-6.493-6.49l-83.474-83.44l-6.49-6.49l-6.49,6.49l-33.079,33.082c-14.422,14.419-24.076,16.573-28.547,16.573c-3.295,0-5.915-1.083-8.24-3.415c-3.151-3.161-8.434-11.5-8.391-31.864c0-0.386-0.021-0.768-0.067-1.147V9.18V0h-9.18H225.599h-9.18v9.18v46.931c-0.024,8.229-1.3,35.166-16.741,35.166c-4.464,0-14.104-2.154-28.519-16.576l-33.103-33.085l-6.49-6.487l-6.49,6.49l-83.44,83.44l-6.487,6.487l6.484,6.49l33.082,33.112c13.018,13.011,18.896,25.343,15.729,32.996c-3.17,7.65-16.046,12.222-34.446,12.222H9.18H0v9.18V343.58v9.18h9.18h46.815c18.396,0,31.273,4.568,34.443,12.219c3.173,7.656-2.705,20.004-15.722,33.025l-33.079,33.08l-6.49,6.49l6.49,6.492l83.44,83.475l6.493,6.496l6.494-6.496l33.097-33.113c14.407-14.4,24.049-16.551,28.51-16.551c15.45,0,16.726,26.918,16.75,35.168v46.936v9.18h9.18h117.984h9.18v-9.18v-45.662c0.046-0.377,0.067-0.752,0.067-1.135c-0.042-20.373,5.239-28.713,8.391-31.871c2.329-2.334,4.951-3.42,8.25-3.42c4.471,0,14.125,2.148,28.544,16.539l33.069,33.104l6.49,6.498l6.493-6.496l83.474-83.471l6.493-6.492l-6.496-6.494l-33.112-33.082c-12.999-13.023-18.871-25.373-15.698-33.023c3.174-7.648,16.065-12.215,34.489-12.215h46.761h9.18v-9.18V225.546v-9.18h-9.18H513.217z M413.1,284.58c0,70.867-57.653,128.52-128.52,128.52c-70.867,0-128.52-57.652-128.52-128.52c0-70.867,57.653-128.52,128.52-128.52C355.446,156.06,413.1,213.713,413.1,284.58z" />
+                    </svg>
+                    Settings
+                </button>
+            </div>
+        </div>
+
+        <div id="main-content">
+            <!-- Views will be injected here -->
+            <div id="home-view" class="view active">
+                <div class="home-header">
+                    <div class="header-content">
+                        <h1 id="welcome-msg">app by moade77</h1>
+                        <div class="search-container">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path
+                                    d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                            </svg>
+                            <input type="text" id="home-search-input" placeholder="Search your music...">
+                            <div id="search-results" class="search-dropdown hidden"></div>
+                        </div>
+                    </div>
+
+                </div>
+
+
+
+                <!-- Recently Played -->
+                <div class="home-section">
+                    <div class="section-title">Recently Played</div>
+                    <div id="recently-played-list" class="horizontal-scroll-list">
+                        <div class="empty-state">Start listening to see your history here.</div>
+                    </div>
+                </div>
+
+                <!-- Top Playlists -->
+                <div class="home-section">
+                    <div class="section-title">Your Playlists</div>
+                    <div id="top-playlists-list" class="horizontal-scroll-list">
+                        <div class="empty-state">No playlists yet.</div>
+                    </div>
+                </div>
+
+                <!-- Suggested -->
+                <div class="home-section">
+                    <div class="section-title">Suggested for You</div>
+                    <div id="suggested-list" class="horizontal-scroll-list">
+                        <div class="empty-state">Add more music to get suggestions.</div>
+                    </div>
+                </div>
+            </div>
+            <div id="library-view" class="view hidden">
+                <div class="view-header">
+                    <h1>Library</h1>
+                    <button id="import-btn-library" class="secondary-btn">Add Songs</button>
+                </div>
+                <div class="song-list-header">
+                    <div class="col-title">Title</div>
+                    <div class="col-artist">Artist</div>
+                    <div class="col-album">Album</div>
+                    <div class="col-duration">Time</div>
+                </div>
+                <div id="song-list"></div>
+                <!-- Songs go here -->
+            </div>
+        </div>
+        <div id="playlist-view" class="view hidden">
+            <div class="playlist-header-info">
+                <img id="playlist-cover" src="" alt="Playlist Art" class="playlist-art-large">
+                <div class="playlist-details">
+                    <span class="playlist-type">Playlist</span>
+                    <h1 id="playlist-title">My Playlist</h1>
+                    <p id="playlist-stats">0 songs</p>
+                </div>
+            </div>
+            <div class="song-list-header">
+                <div class="col-title">Title</div>
+                <div class="col-artist">Artist</div>
+                <div class="col-album">Album</div>
+                <div class="col-duration">Time</div>
+            </div>
+            <div id="playlist-songs">
+                <!-- Playlist songs go here -->
+            </div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settings-view" class="view hidden">
+            <div class="view-header">
+                <h1>Settings</h1>
+            </div>
+
+            <div class="settings-container">
+                <!-- Appearance -->
+                <div class="settings-section">
+                    <h2>Appearance</h2>
+                    <div class="setting-card">
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Theme</div>
+                                <div class="setting-desc">Choose your preferred application theme</div>
+                            </div>
+                            <select id="theme-select" class="setting-control">
+                                <option value="dark">Dark</option>
+                                <option value="light">Light</option>
+                                <option value="system">System</option>
+                            </select>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Accent Color</div>
+                                <div class="setting-desc">Customize the primary color</div>
+                            </div>
+                            <div class="color-picker-wrapper">
+                                <input type="color" id="accent-color-picker" value="#00E5FF">
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Compact Mode</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="compact-mode-toggle">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Sidebar Auto-hide</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="sidebar-autohide-toggle">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Audio -->
+                <div class="settings-section">
+                    <h2>Audio</h2>
+                    <div class="setting-card">
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Output Device</div>
+                            </div>
+                            <select id="audio-output-select" class="setting-control">
+                                <option value="default">Default</option>
+                            </select>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Volume Normalization</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="vol-norm-toggle">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Crossfade</div>
+                                <div class="setting-desc" id="crossfade-value">0 seconds</div>
+                            </div>
+                            <input type="range" id="crossfade-slider" min="0" max="10" step="1" value="0"
+                                class="setting-range">
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Storage -->
+                <div class="settings-section">
+                    <h2>Storage</h2>
+                    <div class="setting-card">
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Music Folder</div>
+                                <div class="setting-desc" id="music-folder-path">...</div>
+                            </div>
+                            <button id="change-folder-btn" class="secondary-btn small">Change</button>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Cache Size</div>
+                                <div class="setting-desc" id="cache-size">Calculating...</div>
+                            </div>
+                            <button id="clear-cache-btn" class="secondary-btn small">Clear Cache</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Integrations -->
+                <div class="settings-section">
+                    <h2>Integrations</h2>
+                    <div class="setting-card">
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Discord Rich Presence</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="discord-rpc-toggle">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Auto-start with System</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="autostart-toggle">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Media Keys Support</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="media-keys-toggle" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced -->
+                <div class="settings-section">
+                    <h2>Advanced</h2>
+                    <div class="setting-card">
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Enable Debug Logs</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="debug-logs-toggle">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Troubleshooting</div>
+                            </div>
+                            <div class="button-group">
+                                <button id="open-config-btn" class="secondary-btn small">Open
+                                    Config</button>
+                                <button id="reset-settings-btn" class="secondary-btn small danger">Reset
+                                    App</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div> <!-- Close app-layout -->
+
+    <!-- Player Bar -->
+    <div id="player-bar">
+        <div class="now-playing">
+            <img id="np-cover" src="assets/placeholder.svg" alt="Cover" onerror="this.src='assets/placeholder.svg'">
+            <div class="np-info">
+                <div id="np-title">No Song Playing</div>
+                <div id="np-artist">Unknown Artist</div>
+            </div>
+        </div>
+
+        <div class="player-controls">
+            <div class="control-buttons">
+                <button id="shuffle-btn" class="player-btn" title="Shuffle">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" />
+                    </svg>
+                </button>
+                <button id="prev-btn" class="player-btn"><svg width="24" height="24" viewBox="0 0 24 24"
+                        fill="currentColor">
+                        <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                    </svg></button>
+                <button id="play-pause-btn" class="player-btn play-btn"><svg width="32" height="32" viewBox="0 0 24 24"
+                        fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                    </svg></button>
+                <button id="next-btn" class="player-btn"><svg width="24" height="24" viewBox="0 0 24 24"
+                        fill="currentColor">
+                        <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                    </svg></button>
+                <button id="repeat-btn" class="player-btn" title="Repeat">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v6z" />
+                    </svg>
+                </button>
+            </div>
+            <div class="playback-bar">
+                <span id="current-time">0:00</span>
+                <input type="range" id="seek-bar" value="0" min="0" max="100">
+                <span id="total-time">0:00</span>
+            </div>
+        </div>
+
+        <div class="volume-controls">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                    d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+            </svg>
+            <input type="range" id="volume-bar" value="100" min="0" max="100">
+        </div>
+    </div>
+
+    <!-- Context Menu (Hidden by default) -->
+    <div id="context-menu" class="context-menu hidden">
+        <div class="menu-item" id="ctx-play">Play</div>
+        <div class="menu-item" id="ctx-add-playlist">Add to Playlist...</div>
+        <div class="menu-item" id="ctx-edit">Edit Info</div>
+        <div class="menu-item" id="ctx-remove-playlist">Remove from Playlist</div>
+        <div class="menu-item delete" id="ctx-delete">Delete from Library</div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Edit Song Info</h2>
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" id="edit-title">
+            </div>
+            <div class="form-group">
+                <label>Artist</label>
+                <input type="text" id="edit-artist">
+            </div>
+            <div class="form-group">
+                <label>Album</label>
+                <input type="text" id="edit-album">
+            </div>
+            <div class="form-group">
+                <label>Cover Art</label>
+                <div class="cover-preview-container">
+                    <img id="edit-cover-preview" src="" alt="Cover">
+                    <button id="change-cover-btn" class="secondary-btn">Change Cover</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-edit-btn" class="secondary-btn">Cancel</button>
+                <button id="save-edit-btn" class="primary-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Playlist Modal -->
+    <div id="create-playlist-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Create Playlist</h2>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="new-playlist-name" placeholder="My Playlist">
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-create-pl-btn" class="secondary-btn">Cancel</button>
+                <button id="confirm-create-pl-btn" class="primary-btn">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add to Playlist Modal -->
+    <div id="add-to-playlist-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Add to Playlist</h2>
+            <div id="add-to-playlist-list" class="playlist-selection-list">
+                <!-- Playlists injected here -->
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-add-pl-btn" class="secondary-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Custom System Modal -->
+    <div id="custom-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="custom-modal-title">Notification</h2>
+            <div id="custom-modal-message" class="modal-message"></div>
+            <div id="custom-modal-input-container" class="form-group hidden" style="margin-top: 15px;">
+                <input type="text" id="custom-modal-input">
+            </div>
+            <div class="modal-actions">
+                <button id="custom-modal-cancel" class="secondary-btn hidden">Cancel</button>
+                <button id="custom-modal-confirm" class="primary-btn">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+    <script src="browser-polyfill.js"></script>
+    <script src="custom-dropdown.js"></script>
+    <script src="custom-modal.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
