@@ -16,11 +16,11 @@ A simple open source music player for windows. With user friendly interface and 
     
 ## Screenshots
 
-![App Screenshot](https://i.ibb.co/6012FkR3/1.png/468x300?)
+![App Screenshot](https://raw.githubusercontent.com/moade771/Moadify/refs/heads/main/screenshots/1.PNG)
 
-![App Screenshot](https://i.ibb.co/1JLFF3ST/2.png/468x300?)
+![App Screenshot](https://raw.githubusercontent.com/moade771/Moadify/refs/heads/main/screenshots/2.PNG)
 
-![App Screenshot](https://i.ibb.co/sdkp5bnV/3.png/468x300?)
+![App Screenshot](https://raw.githubusercontent.com/moade771/Moadify/refs/heads/main/screenshots/3.PNG)
 
 ## Features
 
