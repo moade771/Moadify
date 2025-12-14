@@ -2,7 +2,7 @@ const Client = require('discord-rpc').Client;
 
 class DiscordRPC {
     constructor(clientId) {
-        this.clientId = 'put ur id here'; // Hardcoded ID as per original implementation
+        this.clientId = 'ur id here'; // Hardcoded ID as per original implementation
         this.rpc = null;
         this.startTimestamp = new Date();
         this.isConnected = false;

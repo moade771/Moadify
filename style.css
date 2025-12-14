@@ -62,7 +62,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 10px;
+    padding-left: 10px;
     -webkit-app-region: drag;
     border-bottom: 1px solid var(--border-color);
 }
@@ -79,6 +79,12 @@ body {
     align-items: center;
     height: 100%;
     z-index: 5000;
+    flex-direction: row;
+    /* Ensure horizontal alignment */
+    justify-content: flex-end;
+    /* Align to the right */
+    flex-wrap: nowrap;
+    /* Prevent wrapping */
 }
 
 .control-btn {
@@ -114,11 +120,12 @@ body {
 #sidebar {
     width: 240px;
     background-color: var(--sidebar-bg);
-    padding: 20px 0 20px 10px;
+    padding: 20px 10px;
     display: flex;
     flex-direction: column;
     gap: 20px;
     flex-shrink: 0;
+    transition: width 0.3s ease, padding 0.3s ease;
 }
 
 .nav-btn {
@@ -156,6 +163,11 @@ body {
     font-size: 12px;
     letter-spacing: 1px;
     margin-bottom: 10px;
+    border-bottom: 1px solid transparent;
+    transition: all 0.3s ease;
+    overflow: hidden;
+    height: 30px;
+    /* Explicit height for smooth transition */
 }
 
 #create-playlist-btn {
@@ -452,15 +464,15 @@ h1 {
 
 input[type="range"] {
     -webkit-appearance: none;
-    background: linear-gradient(to right, var(--primary-color) 0%, var(--primary-color) 0%, #555 0%, #555 100%);
+    background: transparent;
     width: 100%;
     cursor: pointer;
-    height: 4px;
-    border-radius: 2px;
+    height: 20px;
+    margin: 0;
 }
 
 input[type="range"]::-webkit-slider-runnable-track {
-    background: transparent;
+    background: linear-gradient(to right, var(--primary-color) 0%, var(--primary-color) var(--seek-value, 0%), #555 var(--seek-value, 0%), #555 100%);
     height: 4px;
     border-radius: 2px;
 }
@@ -475,9 +487,7 @@ input[type="range"]::-webkit-slider-thumb {
     display: block;
 }
 
-input[type="range"]:hover::-webkit-slider-runnable-track {
-    background: transparent;
-}
+
 
 .volume-controls {
     width: 30%;
@@ -1255,7 +1265,7 @@ body.compact .nav-btn {
     height: calc(100vh - var(--player-height) - var(--title-bar-height));
     z-index: 900;
     width: 60px;
-    transition: width 0.3s ease;
+    transition: width 0.3s ease, padding 0.3s ease;
     overflow: hidden;
     background-color: var(--sidebar-bg);
     /* Ensure opacity */
@@ -1264,6 +1274,8 @@ body.compact .nav-btn {
 #sidebar.autohide:hover {
     width: 240px;
     box-shadow: 4px 0 10px rgba(0, 0, 0, 0.5);
+    padding: 20px 10px;
+    /* Restore padding on hover */
 }
 
 #sidebar.autohide .nav-btn span,
@@ -1288,6 +1300,49 @@ body.compact .nav-btn {
 /* Ensure icons stay visible */
 #sidebar.autohide .nav-btn svg {
     min-width: 24px;
+}
+
+/* Smooth Transition Setup */
+.nav-btn,
+.playlist-item {
+    transition: padding 0.3s ease, gap 0.3s ease;
+}
+
+.nav-btn span,
+.playlist-item span {
+    transition: opacity 0.3s ease, max-width 0.3s ease;
+    max-width: 200px;
+    display: inline-block;
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+#sidebar.autohide:not(:hover) {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+#sidebar.autohide:not(:hover) .nav-btn,
+#sidebar.autohide:not(:hover) .playlist-item {
+    padding-left: 18px;
+    padding-right: 18px;
+    gap: 0;
+}
+
+#sidebar.autohide:not(:hover) .section-header {
+    height: 1px;
+    padding: 0;
+    margin: 5px 12px 10px 12px;
+    /* Center with margins: 60px width - 24px margins = 36px line */
+    border-bottom-color: rgba(255, 255, 255, 0.2);
+}
+
+#sidebar.autohide:not(:hover) .nav-btn span,
+#sidebar.autohide:not(:hover) .playlist-item span {
+    opacity: 0;
+    max-width: 0;
+    pointer-events: none;
 }
 
 body:has(#sidebar.autohide) #main-content {
@@ -1338,8 +1393,10 @@ body:has(#sidebar.autohide) #main-content {
 .dropdown-options {
     position: absolute;
     top: 100%;
-    left: 0;
-    width: 100%;
+    right: 0;
+    left: auto;
+    width: max-content;
+    min-width: 100%;
     background-color: var(--context-menu-bg);
     border: 1px solid var(--border-color);
     border-radius: 4px;
@@ -1355,6 +1412,7 @@ body:has(#sidebar.autohide) #main-content {
     padding: 10px 15px;
     cursor: pointer;
     transition: background-color 0.2s;
+    white-space: nowrap;
 }
 
 .dropdown-option:hover {

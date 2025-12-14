@@ -9,6 +9,9 @@ class CustomDropdown {
     }
 
     init() {
+        // Store instance
+        this.selectElement.customDropdown = this;
+
         // Hide original select
         this.selectElement.style.display = 'none';
 
@@ -30,21 +33,7 @@ class CustomDropdown {
         this.optionsContainer = document.createElement('div');
         this.optionsContainer.className = 'dropdown-options hidden';
 
-        // Create options
-        this.options.forEach(opt => {
-            const optionEl = document.createElement('div');
-            optionEl.className = 'dropdown-option';
-            if (opt.selected) optionEl.classList.add('selected');
-            optionEl.textContent = opt.text;
-            optionEl.dataset.value = opt.value;
-
-            optionEl.onclick = (e) => {
-                e.stopPropagation();
-                this.selectOption(opt.value);
-            };
-
-            this.optionsContainer.appendChild(optionEl);
-        });
+        this.buildOptions();
 
         this.container.appendChild(this.selectedDisplay);
         this.container.appendChild(this.optionsContainer);
@@ -64,6 +53,31 @@ class CustomDropdown {
             this.updateSelectedDisplay();
             this.updateOptionsSelection();
         });
+    }
+
+    buildOptions() {
+        this.options = Array.from(this.selectElement.options);
+        this.optionsContainer.innerHTML = '';
+
+        this.options.forEach(opt => {
+            const optionEl = document.createElement('div');
+            optionEl.className = 'dropdown-option';
+            if (opt.selected) optionEl.classList.add('selected');
+            optionEl.textContent = opt.text;
+            optionEl.dataset.value = opt.value;
+
+            optionEl.onclick = (e) => {
+                e.stopPropagation();
+                this.selectOption(opt.value);
+            };
+
+            this.optionsContainer.appendChild(optionEl);
+        });
+    }
+
+    refresh() {
+        this.buildOptions();
+        this.updateSelectedDisplay();
     }
 
     toggleOptions() {
@@ -117,6 +131,7 @@ class CustomDropdown {
     static convertAll(selector = 'select') {
         document.querySelectorAll(selector).forEach(el => {
             // Check if already converted
+            if (el.customDropdown) return;
             if (el.nextSibling && el.nextSibling.classList && el.nextSibling.classList.contains('custom-dropdown')) return;
             new CustomDropdown(el);
         });
