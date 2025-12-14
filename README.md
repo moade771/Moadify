@@ -1,5 +1,5 @@
 
-![Logo](https://i.ibb.co/WpMLv0mg/big-logo.png)
+![Logo](https://raw.githubusercontent.com/moade771/Moadify/refs/heads/main/screenshots/big%20logo.png)
 
 
 # Moadify
