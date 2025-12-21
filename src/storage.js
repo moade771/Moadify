@@ -7,7 +7,6 @@ class Storage {
         this.libraryPath = path.join(userDataPath, 'library.json');
         this.playlistsPath = path.join(userDataPath, 'playlists.json');
         this.settingsPath = path.join(userDataPath, 'settings.json');
-
         this.historyPath = path.join(userDataPath, 'history.json');
 
         this.init();
@@ -20,52 +19,65 @@ class Storage {
         if (!fs.existsSync(this.historyPath)) fs.writeFileSync(this.historyPath, JSON.stringify([]));
     }
 
-    getLibrary() {
+    async getLibrary() {
         try {
-            return JSON.parse(fs.readFileSync(this.libraryPath));
+            const data = await fs.promises.readFile(this.libraryPath, 'utf-8');
+            return JSON.parse(data);
         } catch (e) {
             return [];
         }
     }
 
-    saveLibrary(data) {
-        fs.writeFileSync(this.libraryPath, JSON.stringify(data, null, 2));
+    async saveLibrary(data) {
+        await fs.promises.writeFile(this.libraryPath, JSON.stringify(data, null, 2));
     }
 
-    getPlaylists() {
+    async getPlaylists() {
         try {
-            return JSON.parse(fs.readFileSync(this.playlistsPath));
+            const data = await fs.promises.readFile(this.playlistsPath, 'utf-8');
+            return JSON.parse(data);
         } catch (e) {
             return [];
         }
     }
 
-    savePlaylists(data) {
-        fs.writeFileSync(this.playlistsPath, JSON.stringify(data, null, 2));
+    async savePlaylists(data) {
+        await fs.promises.writeFile(this.playlistsPath, JSON.stringify(data, null, 2));
     }
 
-    getSettings() {
+    async getSettings() {
         try {
-            return JSON.parse(fs.readFileSync(this.settingsPath));
+            const data = await fs.promises.readFile(this.settingsPath, 'utf-8');
+            return JSON.parse(data);
         } catch (e) {
             return {};
         }
     }
 
-    saveSettings(data) {
-        fs.writeFileSync(this.settingsPath, JSON.stringify(data, null, 2));
+    // Sync version for initialization/downloads if strict dependency needed, but usually async is fine
+    getSettingsSync() {
+        try {
+            return JSON.parse(fs.readFileSync(this.settingsPath, 'utf-8'));
+        } catch (e) {
+            return {};
+        }
     }
 
-    getHistory() {
+    async saveSettings(data) {
+        await fs.promises.writeFile(this.settingsPath, JSON.stringify(data, null, 2));
+    }
+
+    async getHistory() {
         try {
-            return JSON.parse(fs.readFileSync(this.historyPath));
+            const data = await fs.promises.readFile(this.historyPath, 'utf-8');
+            return JSON.parse(data);
         } catch (e) {
             return [];
         }
     }
 
-    saveHistory(data) {
-        fs.writeFileSync(this.historyPath, JSON.stringify(data, null, 2));
+    async saveHistory(data) {
+        await fs.promises.writeFile(this.historyPath, JSON.stringify(data, null, 2));
     }
 }
 

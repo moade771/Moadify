@@ -14,6 +14,20 @@
     <div id="title-bar">
         <div id="app-title">Moadify</div>
         <div id="window-controls">
+            <div id="download-indicator" class="download-indicator hidden">
+                <button id="download-btn" title="Downloads">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+                    </svg>
+                </button>
+                <div id="download-panel" class="download-panel hidden">
+                    <div class="download-panel-header">
+                        <span>Downloads</span>
+                        <button id="clear-downloads-btn" class="text-btn">Clear Finished</button>
+                    </div>
+                    <div id="download-list"></div>
+                </div>
+            </div>
             <button id="min-btn" class="control-btn" title="Minimize">&minus;</button>
             <button id="max-btn" class="control-btn" title="Maximize">&#9633;</button>
             <button id="close-btn" class="control-btn" title="Close">&times;</button>
@@ -108,6 +122,13 @@
                 <div class="view-header">
                     <h1>Library</h1>
                     <button id="import-btn-library" class="secondary-btn">Add Songs</button>
+                    <button id="online-import-btn" class="secondary-btn" style="margin-left: 10px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"
+                            style="margin-right:5px; vertical-align:text-bottom;">
+                            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+                        </svg>
+                        Online Import
+                    </button>
                 </div>
                 <div class="song-list-header">
                     <div class="col-title">Title</div>
@@ -136,6 +157,22 @@
             </div>
             <div id="playlist-songs">
                 <!-- Playlist songs go here -->
+            </div>
+        </div>
+
+        <!-- Online Import View -->
+        <div id="online-import-view" class="view hidden" style="height: 100%; display: flex; flex-direction: column;">
+            <div class="view-header" style="flex: 0 0 auto; padding-bottom: 10px;">
+                <button id="online-import-back-btn" class="secondary-btn"
+                    style="margin-right: 15px; display: flex; align-items: center; gap: 8px;">
+                    <img src="assets/back.svg" class="button-icon" alt="Back" style="width: 16px; height: 16px;">
+                    Back</button>
+                <h1>Online Import</h1>
+            </div>
+            <div class="webview-container"
+                style="flex: 1; position: relative; background: #fff; border-radius: 8px; overflow: hidden;">
+                <webview id="import-webview" src="about:blank" style="display:inline-flex; width:100%; height:100%;">
+                </webview>
             </div>
         </div>
 
@@ -234,6 +271,16 @@
                             </div>
                             <button id="clear-cache-btn" class="secondary-btn small">Clear Cache</button>
                         </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Sync with File System</div>
+                                <div class="setting-desc">Remove songs if deleted from PC</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="manage-files-toggle">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -277,12 +324,15 @@
                     <div class="setting-card">
                         <div class="setting-row">
                             <div class="setting-info">
-                                <div class="setting-name">Enable Debug Logs</div>
+                                <div class="setting-name">Developer Mode</div>
                             </div>
-                            <label class="switch">
-                                <input type="checkbox" id="debug-logs-toggle">
-                                <span class="slider round"></span>
-                            </label>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <button id="open-devtools-btn" class="secondary-btn small hidden">Open Tools</button>
+                                <label class="switch">
+                                    <input type="checkbox" id="debug-logs-toggle">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
                         </div>
                         <div class="setting-row">
                             <div class="setting-info">
@@ -293,6 +343,25 @@
                                     Config</button>
                                 <button id="reset-settings-btn" class="secondary-btn small danger">Reset
                                     App</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- About -->
+                <div class="settings-section">
+                    <h2>About</h2>
+                    <div class="setting-card">
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">App Version</div>
+                                <div class="setting-desc" id="app-version">Checking...</div>
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Developer</div>
+                                <div class="setting-desc">moade77</div>
                             </div>
                         </div>
                     </div>
@@ -443,6 +512,7 @@
     <script src="browser-polyfill.js"></script>
     <script src="custom-dropdown.js"></script>
     <script src="custom-modal.js"></script>
+    <script src="drag-controller.js"></script>
     <script src="script.js"></script>
 </body>
 

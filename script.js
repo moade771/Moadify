@@ -16,6 +16,8 @@ const app = {
     lastSelectedSongId: null,
     isShuffle: false,
     repeatMode: 'all', // 'off', 'all', 'one'
+    activeDownloads: {},
+    saveTimeout: null,
 
     init: async () => {
         try {
@@ -41,9 +43,21 @@ const app = {
             app.setupPlaylists();
             app.setupWindowControls();
             app.setupIPC();
+            app.setupDownloads();
+            app.setupWebview();
+
+            // Set Version
+            const version = await window.electronAPI.getVersion();
+            const versionEl = document.getElementById('app-version');
+            if (versionEl) versionEl.textContent = `v${version}`;
 
             // Init Custom UI Components
             CustomDropdown.convertAll();
+
+            // Init Drag Controller
+            if (typeof DragController !== 'undefined') {
+                app.dragController = new DragController();
+            }
 
             // Initial Render
             app.renderLibrary();
@@ -186,6 +200,13 @@ const app = {
         document.getElementById('import-btn-hero')?.addEventListener('click', app.importMusic);
         document.getElementById('import-btn-library').addEventListener('click', app.importMusic);
 
+        // Online Import Navigation
+        document.getElementById('online-import-btn')?.addEventListener('click', () => {
+            // Logic moved to setupWebview, this just switches view
+            app.switchView('online-import');
+        });
+        document.getElementById('online-import-back-btn')?.addEventListener('click', () => app.switchView('library'));
+
 
 
         // Home Search
@@ -209,7 +230,7 @@ const app = {
                 if (matches.length === 0) {
                     searchResults.innerHTML = '<div class="no-results">No songs found</div>';
                 } else {
-                    matches.slice(0, 10).forEach(song => {
+                    matches.forEach(song => {
                         const item = document.createElement('div');
                         item.className = 'search-result-item';
                         item.innerHTML = `
@@ -268,10 +289,214 @@ const app = {
         document.getElementById('close-btn').addEventListener('click', window.electronAPI.close);
     },
 
+    debouncedSaveLibrary: () => {
+        if (app.saveTimeout) clearTimeout(app.saveTimeout);
+        app.saveTimeout = setTimeout(async () => {
+            await window.electronAPI.saveLibrary(app.library);
+            app.saveTimeout = null;
+        }, 2000);
+    },
+
     setupIPC: () => {
         window.electronAPI.onPlayPause(() => app.togglePlay());
         window.electronAPI.onNextTrack(() => app.playNext());
         window.electronAPI.onPrevTrack(() => app.playPrev());
+        window.electronAPI.onLibraryUpdated(async () => {
+            const loadedLibrary = await window.electronAPI.getLibrary();
+            app.library = Array.isArray(loadedLibrary) ? loadedLibrary : [];
+            app.renderLibrary();
+
+            const loadedHistory = await window.electronAPI.getHistory();
+            app.recentlyPlayed = Array.isArray(loadedHistory) ? loadedHistory : [];
+            app.renderHome();
+        });
+    },
+
+    setupWebview: () => {
+        const webview = document.getElementById('import-webview');
+        if (!webview) return;
+
+        // Lazy load on view switch
+        document.getElementById('online-import-btn')?.addEventListener('click', () => {
+            if (webview.src === 'about:blank') {
+                webview.src = 'https://spotdown.org';
+            }
+        });
+
+        webview.addEventListener('dom-ready', () => {
+            // Inject DOM-based Ad Blocker for stubborn overlays
+            webview.executeJavaScript(`
+                const removeAds = () => {
+                    const elements = document.querySelectorAll('div, iframe');
+                    elements.forEach(el => {
+                         let style = null;
+                         try { style = window.getComputedStyle(el); } catch(e) {}
+                         
+                         if (!style) return;
+
+                         // Exact User Signature 1: "98% width/height overlay"
+                         // properties: padding: 0px, margin: 1%, width: 98%, height: 98%, position: relative, pointer-events: none
+                         if (style.width === '98%' && style.height === '98%' && style.position === 'relative' && style.pointerEvents === 'none') {
+                             if (style.margin.includes('1%') || el.style.margin === '1%') {
+                                 el.remove();
+                                 console.log('Removed Ad Overlay (Exact Match)');
+                                 return;
+                             }
+                         }
+
+                         // Signature 2: Centered white modal popup
+                         if (style.position === 'absolute' && style.left.includes('50%') && style.top.includes('50%')) {
+                             if (style.backgroundColor === 'rgb(255, 255, 255)' || style.backgroundColor === '#ffffff') {
+                                if (style.boxShadow.includes('rgba(0, 0, 0, 0.22)') || style.borderRadius.includes('1.6em')) {
+                                     el.remove();
+                                     console.log('Removed Ad Modal (Exact Match)');
+                                     return;
+                                }
+                             }
+                         }
+                         
+                         // General High Z-Index & Overlay protection
+                         if (parseInt(style.zIndex) > 9999) {
+                             if ((style.position === 'fixed' || style.position === 'absolute')) {
+                                 // Check for common overlay descriptors in class/id
+                                 const idClass = (el.id + " " + el.className).toLowerCase();
+                                 if (idClass.includes('ad') || idClass.includes('banner') || idClass.includes('popup') || idClass.includes('overlay')) {
+                                      el.remove();
+                                 }
+                             }
+                         }
+                    });
+                };
+                
+                // 1. Run immediately
+                removeAds();
+
+                // 2. Run on interval (fallback)
+                setInterval(removeAds, 500);
+
+                // 3. Run on MutationObserver (Always scan)
+                const observer = new MutationObserver((mutations) => {
+                    removeAds();
+                });
+                
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true,
+                    attributeFilter: ['style', 'class']
+                });
+                
+                // CSS Injection to prevent rendering
+                const style = document.createElement('style');
+                style.textContent = '.ad, .ads, .advertisement, [id*="google_ads"], iframe[src*="google"], iframe[src*="doubleclick"] { display: none !important; }';
+                document.head.appendChild(style);
+             `);
+        });
+    },
+
+    setupDownloads: () => {
+        const btn = document.getElementById('download-btn');
+        const panel = document.getElementById('download-panel');
+        const indicator = document.getElementById('download-indicator');
+        const clearBtn = document.getElementById('clear-downloads-btn');
+
+        if (btn && panel) {
+            btn.addEventListener('click', () => panel.classList.toggle('hidden'));
+            document.addEventListener('click', (e) => {
+                if (indicator && !indicator.contains(e.target)) {
+                    panel.classList.add('hidden');
+                }
+            });
+        }
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                Object.keys(app.activeDownloads).forEach(id => {
+                    if (app.activeDownloads[id].state === 'completed' || app.activeDownloads[id].state === 'interrupted') {
+                        const el = document.getElementById(`dl-${id}`);
+                        if (el) el.remove();
+                        delete app.activeDownloads[id];
+                    }
+                });
+                if (Object.keys(app.activeDownloads).length === 0) indicator?.classList.add('hidden');
+            });
+        }
+
+        window.electronAPI.onDownloadStarted((data) => {
+            app.activeDownloads[data.id] = { ...data, state: 'progressing' };
+            if (indicator) indicator.classList.remove('hidden');
+
+            const list = document.getElementById('download-list');
+            if (list) {
+                const item = document.createElement('div');
+                item.id = `dl-${data.id}`;
+                item.className = 'download-item';
+                item.innerHTML = `
+                     <img src="${data.cover || 'assets/placeholder.svg'}" class="download-thumb">
+                     <div class="download-info">
+                         <div class="download-name">${data.filename}</div>
+                         <div class="download-status">
+                             <span class="status-text">Downloading...</span>
+                             <span class="percent-text">0%</span>
+                         </div>
+                         <div class="progress-bar"><div class="progress-fill"></div></div>
+                     </div>
+                 `;
+                list.insertBefore(item, list.firstChild);
+            }
+        });
+
+        window.electronAPI.onDownloadProgress((data) => {
+            const dl = app.activeDownloads[data.id];
+            if (dl) {
+                dl.state = data.state;
+                const el = document.getElementById(`dl-${data.id}`);
+                if (el) {
+                    const percent = Math.round(data.progress * 100);
+                    const fill = el.querySelector('.progress-fill');
+                    if (fill) fill.style.width = `${percent}%`;
+                    const pText = el.querySelector('.percent-text');
+                    if (pText) pText.textContent = `${percent}%`;
+                }
+            }
+        });
+
+        window.electronAPI.onDownloadComplete(async (data) => {
+            const dl = app.activeDownloads[data.id];
+            if (dl) {
+                dl.state = 'completed';
+                const el = document.getElementById(`dl-${data.id}`);
+                if (el) {
+                    el.classList.add('completed');
+                    el.querySelector('.progress-fill').style.width = '100%';
+                    el.querySelector('.status-text').textContent = 'Imported';
+                    el.querySelector('.percent-text').textContent = 'Done';
+                }
+
+                try {
+                    const song = await window.electronAPI.parseMetadata(data.path);
+                    if (song) {
+                        const exists = app.library.some(s => s.path === song.path);
+                        if (!exists) {
+                            app.library.push(song);
+                            app.debouncedSaveLibrary(); // Use debounced save
+                            app.appendSongToLibrary(song); // Add to UI
+                        }
+                    }
+                } catch (e) {
+                    console.error("Auto Import Failed", e);
+                }
+
+                // Auto-remove after 3s
+                setTimeout(() => {
+                    if (el) el.remove();
+                    delete app.activeDownloads[data.id];
+                    if (Object.keys(app.activeDownloads).length === 0 && indicator) {
+                        indicator.classList.add('hidden');
+                    }
+                }, 3000);
+            }
+        });
     },
 
     importMusic: async () => {
@@ -280,27 +505,47 @@ const app = {
 
         app.switchView('library');
 
-        // Process sequentially to avoid freezing, but update UI as we go
-        for (const filePath of paths) {
-            try {
-                const song = await window.electronAPI.parseMetadata(filePath);
+        // Process in chunks to avoid freezing
+        const chunkSize = 5; // Process 5 files at a time
+        const fragment = document.createDocumentFragment();
+        let hasChanges = false;
+
+        const list = document.getElementById('song-list');
+
+        for (let i = 0; i < paths.length; i += chunkSize) {
+            const chunk = paths.slice(i, i + chunkSize);
+            // Parallel parse
+            const promises = chunk.map(path => window.electronAPI.parseMetadata(path));
+            const results = await Promise.all(promises);
+
+            for (const song of results) {
                 if (song) {
-                    // Check if song already exists
                     const exists = app.library.some(s => s.path === song.path);
                     if (!exists) {
                         app.library.push(song);
-                        app.appendSongToLibrary(song);
+                        const row = app.createSongRow(song);
+                        fragment.appendChild(row);
+                        hasChanges = true;
                     }
                 }
-            } catch (e) {
-                console.error("Error parsing", filePath, e);
             }
+
+            // Append batch to DOM
+            if (fragment.children.length > 0) {
+                list.appendChild(fragment);
+                // Reset fragment is optional as appendChild moves nodes, but good practice
+            }
+
+            // Yield to main thread for UI updates
+            await new Promise(r => setTimeout(r, 10));
         }
-        await window.electronAPI.saveLibrary(app.library);
+
+        if (hasChanges) {
+            app.debouncedSaveLibrary();
+        }
     },
 
-    appendSongToLibrary: (song) => {
-        const list = document.getElementById('song-list');
+    createSongRow: (song) => {
         const row = document.createElement('div');
         row.className = 'song-row';
         row.dataset.id = song.id;
@@ -317,7 +562,15 @@ const app = {
         row.addEventListener('click', (e) => app.handleSongClick(e, song, app.library));
         row.addEventListener('dblclick', () => app.playSong(song, app.library));
         row.addEventListener('contextmenu', (e) => app.showContextMenu(e, song));
-        list.appendChild(row);
+        return row;
+    },
+
+    appendSongToLibrary: (song) => {
+        const list = document.getElementById('song-list');
+        if (list) {
+            const row = app.createSongRow(song);
+            list.appendChild(row);
+        }
     },
 
     handleSongClick: (e, song, songList) => {
@@ -360,6 +613,27 @@ const app = {
                 row.classList.remove('selected');
             }
         });
+    },
+
+    adjustMenuPosition: (menu, x, y) => {
+        const rect = menu.getBoundingClientRect();
+        const winWidth = window.innerWidth;
+        const winHeight = window.innerHeight;
+
+        let left = x;
+        let top = y;
+
+        // Prevent going off right edge
+        if (left + rect.width > winWidth) {
+            left = winWidth - rect.width - 10;
+        }
+        // Prevent going off bottom edge
+        if (top + rect.height > winHeight) {
+            top = winHeight - rect.height - 10;
+        }
+
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
     },
 
 
@@ -518,9 +792,15 @@ const app = {
         }
 
         const menu = document.getElementById('context-menu');
-        menu.style.top = `${e.clientY}px`;
-        menu.style.left = `${e.clientX}px`;
+        // Show momentarily off-screen or invisible to measure, 
+        // but 'hidden' class uses display:none, so we must remove it to get BBox.
+        // To prevent flicker, we can manage opacity if needed, but usually this is fast enough.
+        menu.style.opacity = '0';
         menu.classList.remove('hidden');
+
+        app.adjustMenuPosition(menu, e.clientX, e.clientY);
+
+        menu.style.opacity = '1';
 
         app.contextMenuTargetId = song.id;
 
@@ -693,14 +973,16 @@ const app = {
         const menu = document.createElement('div');
         menu.id = 'playlist-ctx-menu';
         menu.className = 'context-menu';
-        menu.style.top = `${e.clientY}px`;
-        menu.style.left = `${e.clientX}px`;
+        // Position will be set by adjustMenuPosition
+        menu.style.opacity = '0';
         menu.innerHTML = `
             <div class="menu-item" id="pl-ctx-rename">Rename</div>
             <div class="menu-item delete" id="pl-ctx-delete">Delete</div>
         `;
 
         document.body.appendChild(menu);
+        app.adjustMenuPosition(menu, e.clientX, e.clientY);
+        menu.style.opacity = '1';
 
         const closeMenu = (ev) => {
             if (!menu.contains(ev.target)) {
@@ -744,8 +1026,7 @@ const app = {
         const menu = document.createElement('div');
         menu.id = 'playlist-cover-ctx-menu';
         menu.className = 'context-menu';
-        menu.style.top = `${e.clientY}px`;
-        menu.style.left = `${e.clientX}px`;
+        menu.style.opacity = '0';
 
         let menuHtml = '<div class="menu-item" id="pl-cover-ctx-change">Change Cover</div>';
         if (playlist.cover) {
@@ -754,6 +1035,8 @@ const app = {
         menu.innerHTML = menuHtml;
 
         document.body.appendChild(menu);
+        app.adjustMenuPosition(menu, e.clientX, e.clientY);
+        menu.style.opacity = '1';
 
         const closeMenu = (ev) => {
             if (!menu.contains(ev.target)) {
@@ -1234,7 +1517,8 @@ const app = {
         discordRpc: false,
         autostart: false,
         mediaKeys: true,
-        debugLogs: false
+        debugLogs: false,
+        fileSync: false
     },
 
     setupSettings: () => {
@@ -1371,15 +1655,82 @@ const app = {
 
 
         bindToggle('discord-rpc-toggle', 'discordRpc');
-        bindToggle('autostart-toggle', 'autostart');
+
+        // Auto-start (Custom logic to sync with system)
+        const autostartEl = document.getElementById('autostart-toggle');
+        if (autostartEl) {
+            // Check actual system status
+            window.electronAPI.getAutostartStatus().then(isEnabled => {
+                app.settings.autostart = isEnabled;
+                autostartEl.checked = isEnabled;
+                app.saveSettings();
+            });
+
+            autostartEl.addEventListener('change', async (e) => {
+                const enabled = e.target.checked;
+                app.settings.autostart = enabled;
+                app.saveSettings();
+                await window.electronAPI.toggleAutostart(enabled);
+            });
+        }
+
+        // File Sync
+        const fileSyncEl = document.getElementById('manage-files-toggle');
+        if (fileSyncEl) {
+            window.electronAPI.getFileSyncStatus().then(isEnabled => {
+                app.settings.fileSync = isEnabled;
+                fileSyncEl.checked = isEnabled;
+                app.saveSettings();
+            });
+
+            fileSyncEl.addEventListener('change', async (e) => {
+                const enabled = e.target.checked;
+                app.settings.fileSync = enabled;
+                app.saveSettings();
+                await window.electronAPI.toggleFileSync(enabled);
+            });
+        }
+
         bindToggle('media-keys-toggle', 'mediaKeys');
-        bindToggle('debug-logs-toggle', 'debugLogs');
+        bindToggle('media-keys-toggle', 'mediaKeys');
+
+        // Developer Mode Logic
+        const debugToggle = document.getElementById('debug-logs-toggle');
+        const openToolsBtn = document.getElementById('open-devtools-btn');
+
+        if (debugToggle && openToolsBtn) {
+            // Init State
+            debugToggle.checked = app.settings.debugLogs;
+            if (app.settings.debugLogs) {
+                openToolsBtn.classList.remove('hidden');
+            } else {
+                openToolsBtn.classList.add('hidden');
+            }
+
+            debugToggle.addEventListener('change', (e) => {
+                app.settings.debugLogs = e.target.checked;
+                app.saveSettings();
+
+                if (e.target.checked) {
+                    openToolsBtn.classList.remove('hidden');
+                } else {
+                    openToolsBtn.classList.add('hidden');
+                    // Optional: Close if turned off
+                    // window.electronAPI.setDebugMode(false); 
+                }
+            });
+
+            openToolsBtn.addEventListener('click', () => {
+                window.electronAPI.setDebugMode(true);
+            });
+        }
 
         // Reset
         const resetBtn = document.getElementById('reset-settings-btn');
         if (resetBtn) {
             resetBtn.addEventListener('click', async () => {
-                if (await CustomModal.confirm('Reset all settings to default?')) {
+                if (await CustomModal.confirm('Factory Reset: Delete all data (Library, Playlists, Settings) and restart?')) {
+                    await window.electronAPI.resetApp();
                     localStorage.removeItem('moadify-settings');
                     location.reload();
                 }
@@ -1387,8 +1738,8 @@ const app = {
         }
         const openConfigBtn = document.getElementById('open-config-btn');
         if (openConfigBtn) {
-            openConfigBtn.addEventListener('click', async () => {
-                await CustomModal.alert('Config folder is at: ' + (app.settings.musicFolder || 'UserData'));
+            openConfigBtn.addEventListener('click', () => {
+                window.electronAPI.openConfigFolder();
             });
         }
 
@@ -1430,6 +1781,9 @@ const app = {
                 r.style.setProperty('--context-menu-bg', '#ffffff');
                 r.style.setProperty('--search-bg', '#f3f3f3');
                 r.style.setProperty('--inverse-text', '#ffffff');
+                r.style.setProperty('--slider-bg', '#ccc');
+                r.style.setProperty('--switch-bg', '#ccc');
+                r.style.setProperty('--icon-filter', 'none');
             } else {
                 // Dark (Default)
                 r.style.setProperty('--bg-color', '#121212');
@@ -1447,6 +1801,9 @@ const app = {
                 r.style.setProperty('--context-menu-bg', '#282828');
                 r.style.setProperty('--search-bg', '#2a2a2a');
                 r.style.setProperty('--inverse-text', '#000000');
+                r.style.setProperty('--slider-bg', '#555');
+                r.style.setProperty('--switch-bg', '#444');
+                r.style.setProperty('--icon-filter', 'invert(1)');
             }
         };
 
@@ -1487,6 +1844,8 @@ const app = {
         if (app.audio.setSinkId && app.settings.audioOutput !== 'default') {
             app.audio.setSinkId(app.settings.audioOutput).catch(e => console.warn(e));
         }
+
+
     }
 };
 
