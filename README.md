@@ -27,7 +27,7 @@ A simple open source music player for windows. With user friendly interface and 
 - Offline local music playback (MP3, WAV, FLAC, OGG, AAC) 
 - Lightweight and low RAM usage (it can work on anything)
 - Shows your listening activity on Discord in real time (not perfect tho)
-- Can be used when offline
+- Includes online importing via spotdown.org (meaning you can import music from your Spotify playlist, or search for tracks and download them)
 
 ## Using the source code
 
