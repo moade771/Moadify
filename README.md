@@ -24,12 +24,10 @@ A simple open source music player for windows. With user friendly interface and 
 
 ## Features
 
-- Offline local music playback (MP3, WAV, FLAC, OGG, AAC)
-- No ads / no tracking 
-- Secure local file access only
-- 100% offline-first (no streaming required)
+- Offline local music playback (MP3, WAV, FLAC, OGG, AAC) 
 - Lightweight and low RAM usage (it can work on anything)
 - Shows your listening activity on Discord in real time (not perfect tho)
+- Can be used when offline
 
 ## Using the source code
 
