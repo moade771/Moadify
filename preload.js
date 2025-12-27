@@ -5,6 +5,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     minimize: () => ipcRenderer.send('minimize-window'),
     maximize: () => ipcRenderer.send('maximize-window'),
     close: () => ipcRenderer.send('close-window'),
+    setWindowSize: (width, height, x, y) => ipcRenderer.send('set-window-size', { width, height, x, y }),
+    setAlwaysOnTopFn: (enable) => ipcRenderer.send('set-always-on-top', enable), // Direct window control for mini mode if needed
+    setAlwaysOnTopSetting: (enable) => ipcRenderer.invoke('set-always-on-top-setting', enable),
+    getAlwaysOnTopSetting: () => ipcRenderer.invoke('get-always-on-top-setting'),
 
     // Library & Storage
     getLibrary: () => ipcRenderer.invoke('get-library'),
@@ -47,4 +51,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     toggleFileSync: (enable) => ipcRenderer.invoke('toggle-file-sync', enable),
     getFileSyncStatus: () => ipcRenderer.invoke('get-file-sync-status'),
     onLibraryUpdated: (callback) => ipcRenderer.on('library-updated', callback),
+
+    // Auto-Updater
+    checkForUpdates: () => ipcRenderer.send('check-for-updates'),
+    downloadUpdate: () => ipcRenderer.send('download-update'),
+    quitAndInstall: () => ipcRenderer.send('quit-and-install'),
+    getAutoUpdateStatus: () => ipcRenderer.invoke('get-auto-update-setting'),
+    toggleAutoUpdate: (enable) => ipcRenderer.send('set-auto-update-setting', enable),
+
+    onUpdateStatus: (callback) => ipcRenderer.on('update-status', (event, data) => callback(data)),
+    onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (event, data) => callback(data)),
 });

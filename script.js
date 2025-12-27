@@ -18,6 +18,8 @@ const app = {
     repeatMode: 'all', // 'off', 'all', 'one'
     activeDownloads: {},
     saveTimeout: null,
+    isMiniMode: false,
+    lastWindowSize: { width: 1200, height: 800 },
 
     init: async () => {
         try {
@@ -44,7 +46,10 @@ const app = {
             app.setupWindowControls();
             app.setupIPC();
             app.setupDownloads();
+
             app.setupWebview();
+            app.setupUpdates();
+
 
             // Set Version
             const version = await window.electronAPI.getVersion();
@@ -69,6 +74,7 @@ const app = {
 
             // Global Click to close context menu
             document.addEventListener('click', (e) => {
+                // 1. Context Menu Closing
                 if (!e.target.closest('.context-menu')) {
                     // Hide static context menu
                     const staticMenu = document.getElementById('context-menu');
@@ -78,12 +84,57 @@ const app = {
                     const dynamicMenu = document.getElementById('playlist-ctx-menu');
                     if (dynamicMenu) dynamicMenu.remove();
                 }
+
+                // 2. Click Outside to Deselect
+                // Only process if we are in a view with selectable items
+                if (['library', 'playlist'].includes(app.currentView)) {
+                    // Check if click is within the main content area where songs live
+                    const isMainContent = e.target.closest('#main-content');
+
+                    // If clicking outside main content (sidebar, player bar, modals), do nothing
+                    if (!isMainContent) return;
+
+                    const isSongRow = e.target.closest('.song-row');
+                    // If clicking a song row, selection is handled by handleSongClick
+                    if (isSongRow) return;
+
+                    // Check for interactive elements (buttons, inputs) to prevent accidental deselect
+                    // Note: Context menus and Modals are outside #main-content, so they are already excluded.
+                    const isInteractive = e.target.closest('button, input, select, a');
+
+                    if (!isInteractive) {
+                        if (app.selectedSongs.size > 0) {
+                            app.selectedSongs.clear();
+                            app.updateSelectionUI();
+                        }
+                    }
+                }
             });
         } catch (e) {
             console.error("Initialization Error:", e);
             await CustomModal.alert("An error occurred while starting the app: " + e.message);
         }
     },
+
+    showToast: (message, duration = 4000) => {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerHTML = `
+            <span>${message}</span>
+            <button onclick="this.parentElement.remove()" style="background:none;border:none;color:inherit;cursor:pointer;font-size:18px;">&times;</button>
+        `;
+
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.classList.add('hiding');
+            toast.addEventListener('animationend', () => toast.remove());
+        }, duration);
+    },
+
 
     addToRecentlyPlayed: (song) => {
         // Remove if already exists to move to top
@@ -287,6 +338,77 @@ const app = {
         document.getElementById('min-btn').addEventListener('click', window.electronAPI.minimize);
         document.getElementById('max-btn').addEventListener('click', window.electronAPI.maximize);
         document.getElementById('close-btn').addEventListener('click', window.electronAPI.close);
+
+        // Mini Player
+        document.getElementById('mini-player-btn')?.addEventListener('click', app.toggleMiniMode);
+        document.getElementById('restore-mini-btn')?.addEventListener('click', app.toggleMiniMode);
+        document.getElementById('pip-btn')?.addEventListener('click', () => {
+            const newState = !app.settings.alwaysOnTop;
+            app.settings.alwaysOnTop = newState;
+            window.electronAPI.setAlwaysOnTopSetting(newState);
+            app.saveSettings();
+
+            // Update UI
+            const btn = document.getElementById('pip-btn');
+            if (newState) btn.classList.add('active');
+            else btn.classList.remove('active');
+
+            // Update Settings Checkbox if visible (though mini mode hides it)
+            const toggle = document.getElementById('always-on-top-toggle');
+            if (toggle) toggle.checked = newState;
+        });
+    },
+
+    toggleMiniMode: () => {
+        app.isMiniMode = !app.isMiniMode;
+
+        if (app.isMiniMode) {
+            // Save current size and position
+            const winX = window.screenX;
+            const winY = window.screenY;
+            app.lastWindowSize = {
+                width: window.outerWidth,
+                height: window.outerHeight,
+                x: winX,
+                y: winY
+            };
+
+            document.body.classList.add('mini-mode');
+
+            // Calculate Position (Bottom Right)
+            const width = 350;
+            const height = 160;
+            const screenWidth = window.screen.availWidth;
+            const screenHeight = window.screen.availHeight;
+            const x = screenWidth - width - 20; // 20px padding
+            const y = screenHeight - height - 20;
+
+            window.electronAPI.setWindowSize(width, height, x, y);
+
+            // Sync PIP button state
+            const pipBtn = document.getElementById('pip-btn');
+            if (pipBtn) {
+                // Check actual system state or settings
+                window.electronAPI.getAlwaysOnTopSetting().then(isAot => {
+                    app.settings.alwaysOnTop = isAot; // Ensure sync
+                    if (isAot) pipBtn.classList.add('active');
+                    else pipBtn.classList.remove('active');
+                });
+            }
+        } else {
+            document.body.classList.remove('mini-mode');
+            // Restore size and position
+            if (app.lastWindowSize) {
+                window.electronAPI.setWindowSize(
+                    app.lastWindowSize.width,
+                    app.lastWindowSize.height,
+                    app.lastWindowSize.x,
+                    app.lastWindowSize.y
+                );
+            } else {
+                window.electronAPI.setWindowSize(1200, 800);
+            }
+        }
     },
 
     debouncedSaveLibrary: () => {
@@ -545,7 +667,7 @@ const app = {
         }
     },
 
-    createSongRow: (song) => {
+    createSongRow: (song, songList = app.library) => {
         const row = document.createElement('div');
         row.className = 'song-row';
         row.dataset.id = song.id;
@@ -555,13 +677,28 @@ const app = {
                 <span>${song.title}</span>
             </div>
             <div class="col-artist">${song.artist}</div>
-            <div class="col-album">${song.album}</div>
+            <div class="col-album"><span class="album-link">${song.album}</span></div>
             <div class="col-duration">${app.formatTime(song.duration)}</div>
         `;
 
-        row.addEventListener('click', (e) => app.handleSongClick(e, song, app.library));
-        row.addEventListener('dblclick', () => app.playSong(song, app.library));
+        const albumSpan = row.querySelector('.col-album .album-link');
+        if (albumSpan) {
+            albumSpan.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                app.openAlbum(song.album);
+            });
+        }
+
+        row.addEventListener('click', (e) => app.handleSongClick(e, song, songList));
+        row.addEventListener('dblclick', () => app.playSong(song, songList));
         row.addEventListener('contextmenu', (e) => app.showContextMenu(e, song));
+
+        // Middle Click Listener (mousedown for instant reaction)
+        row.addEventListener('mousedown', (e) => app.handleMiddleClick(e, song, songList));
+        // Also prevent auxclick default ensuring no weird browser behavior (like opening new tab)
+        row.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
+
         return row;
     },
 
@@ -605,12 +742,52 @@ const app = {
         app.updateSelectionUI();
     },
 
+    handleMiddleClick: (e, song, songList) => {
+        // Detect Middle Click (Button 1)
+        if (e.button === 1 && app.settings.middleClick) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Cancel drag if active
+            if (app.dragController && app.dragController.isDragging) {
+                app.dragController.cancelDrag();
+                return;
+            }
+
+            // Visual Feedback (Ripple)
+            const row = e.currentTarget;
+            row.animate([
+                { backgroundColor: 'var(--primary-color)', opacity: 0.3 },
+                { backgroundColor: 'transparent', opacity: 1 }
+            ], {
+                duration: 300,
+                easing: 'ease-out'
+            });
+
+            // Play Immediate
+            app.playSong(song, songList);
+        }
+    },
+
     updateSelectionUI: () => {
+        const playingSong = app.queue[app.currentIndex];
+        const playingId = playingSong ? playingSong.id : null;
+
         document.querySelectorAll('.song-row').forEach(row => {
-            if (app.selectedSongs.has(row.dataset.id)) {
-                row.classList.add('selected');
+            const isPlaying = (row.dataset.id === playingId);
+
+            // Playing State (Frame)
+            if (isPlaying) {
+                row.classList.add('playing-active');
+                row.classList.remove('selected'); // Force remove selected visual even if logically selected
             } else {
-                row.classList.remove('selected');
+                row.classList.remove('playing-active');
+                // Selection State - only if not playing
+                if (app.selectedSongs.has(row.dataset.id)) {
+                    row.classList.add('selected');
+                } else {
+                    row.classList.remove('selected');
+                }
             }
         });
     },
@@ -654,22 +831,7 @@ const app = {
 
         const fragment = document.createDocumentFragment();
         app.library.forEach(song => {
-            const row = document.createElement('div');
-            row.className = 'song-row';
-            row.dataset.id = song.id;
-            row.innerHTML = `
-                <div class="col-title">
-                    <img src="${song.cover || 'assets/placeholder.svg'}" class="song-img" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cmVjdCB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIGZpbGw9IiMzMzMiLz48L3N2Zz4='">
-                    <span>${song.title}</span>
-                </div>
-                <div class="col-artist">${song.artist}</div>
-                <div class="col-album">${song.album}</div>
-                <div class="col-duration">${app.formatTime(song.duration)}</div>
-            `;
-
-            row.addEventListener('click', (e) => app.handleSongClick(e, song, app.library));
-            row.addEventListener('dblclick', () => app.playSong(song, app.library));
-            row.addEventListener('contextmenu', (e) => app.showContextMenu(e, song));
+            const row = app.createSongRow(song, app.library);
             fragment.appendChild(row);
         });
         list.appendChild(fragment);
@@ -741,14 +903,21 @@ const app = {
 
     openPlaylist: (playlist) => {
         app.switchView('playlist');
+        const typeLabel = document.getElementById('playlist-type-label');
+        if (typeLabel) typeLabel.textContent = 'Playlist';
+
+        document.getElementById('playlist-view').dataset.playlistId = playlist.id;
         document.getElementById('playlist-title').textContent = playlist.name;
         document.getElementById('playlist-stats').textContent = `${playlist.songs.length} songs`;
 
         const list = document.getElementById('playlist-songs');
         list.innerHTML = '';
 
-        // Filter songs that are in the playlist
-        const playlistSongs = app.library.filter(s => playlist.songs.includes(s.id));
+        // Filter songs that are in the playlist, preserving order
+        const libraryMap = new Map(app.library.map(s => [s.id, s]));
+        const playlistSongs = playlist.songs
+            .map(id => libraryMap.get(id))
+            .filter(s => s !== undefined);
 
         const coverImg = document.getElementById('playlist-cover');
         coverImg.src = playlist.cover || 'assets/placeholder.svg';
@@ -758,26 +927,72 @@ const app = {
         };
 
         playlistSongs.forEach(song => {
-            const row = document.createElement('div');
-            row.className = 'song-row';
-            row.dataset.id = song.id;
-            row.innerHTML = `
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'song-row';
+            rowDiv.dataset.id = song.id;
+            rowDiv.innerHTML = `
                 <div class="col-title">
                     <img src="${song.cover || ''}" class="song-img" onerror="this.style.display='none'">
                     <span>${song.title}</span>
                 </div>
                 <div class="col-artist">${song.artist}</div>
-                <div class="col-album">${song.album}</div>
+                <div class="col-album"><span class="album-link">${song.album}</span></div>
                 <div class="col-duration">${app.formatTime(song.duration)}</div>
             `;
-            row.addEventListener('click', (e) => app.handleSongClick(e, song, playlistSongs));
-            row.addEventListener('dblclick', () => app.playSong(song, playlistSongs));
-            row.addEventListener('contextmenu', (e) => app.showContextMenu(e, song, playlist));
-            list.appendChild(row);
+
+            const albumSpan = rowDiv.querySelector('.col-album .album-link');
+            if (albumSpan) {
+                albumSpan.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    app.openAlbum(song.album);
+                });
+            }
+
+            rowDiv.addEventListener('click', (e) => app.handleSongClick(e, song, playlistSongs));
+            rowDiv.addEventListener('dblclick', () => app.playSong(song, playlistSongs));
+            rowDiv.addEventListener('contextmenu', (e) => app.showContextMenu(e, song, playlist));
+
+            // NEW Middle Click
+            rowDiv.addEventListener('mousedown', (e) => app.handleMiddleClick(e, song, playlistSongs));
+            rowDiv.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
+
+            list.appendChild(rowDiv);
         });
 
         app.updateSelectionUI();
 
+    },
+
+    openAlbum: (albumName) => {
+        app.switchView('playlist');
+
+        const typeLabel = document.getElementById('playlist-type-label');
+        if (typeLabel) typeLabel.textContent = 'Album';
+
+        // Find all songs in this album
+        const albumSongs = app.library.filter(s => s.album === albumName);
+
+        if (albumSongs.length === 0) return;
+
+        document.getElementById('playlist-title').textContent = albumName;
+        document.getElementById('playlist-stats').textContent = `${albumSongs.length} songs`;
+
+        const coverImg = document.getElementById('playlist-cover');
+        // Use the first song's cover
+        coverImg.src = albumSongs[0].cover || 'assets/placeholder.svg';
+        // Clear context menu for cover since it's an album
+        coverImg.oncontextmenu = null;
+
+        const list = document.getElementById('playlist-songs');
+        list.innerHTML = '';
+
+        albumSongs.forEach(song => {
+            const row = app.createSongRow(song, albumSongs);
+            list.appendChild(row);
+        });
+
+        app.updateSelectionUI();
     },
 
     showContextMenu: (e, song, playlist = null) => {
@@ -1284,10 +1499,6 @@ const app = {
         app.updateDiscordRPC(song);
         app.addToRecentlyPlayed(song);
 
-        // Select the currently playing song
-        app.selectedSongs.clear();
-        app.selectedSongs.add(song.id);
-        app.lastSelectedSongId = song.id;
         app.updateSelectionUI();
     },
 
@@ -1518,18 +1729,33 @@ const app = {
         autostart: false,
         mediaKeys: true,
         debugLogs: false,
-        fileSync: false
+        fileSync: false,
+        customTitleBar: true,
+        middleClick: true
     },
 
     setupSettings: () => {
         app.loadSettings();
+        // Store initial state to prevent visual glitches before restart
+        app.initialCustomTitleBar = app.settings.customTitleBar;
 
         // Theme
         const themeSelect = document.getElementById('theme-select');
         if (themeSelect) {
             themeSelect.value = app.settings.theme;
             themeSelect.addEventListener('change', (e) => {
-                app.settings.theme = e.target.value;
+                const newTheme = e.target.value;
+                app.settings.theme = newTheme;
+
+                // Update accent color if theme provides one
+                // app.themes is populated by applySettings, which is called at init
+                if (app.themes && app.themes[newTheme] && app.themes[newTheme].accentColor) {
+                    app.settings.accentColor = app.themes[newTheme].accentColor;
+                    // Update picker UI
+                    const colorPicker = document.getElementById('accent-color-picker');
+                    if (colorPicker) colorPicker.value = app.settings.accentColor;
+                }
+
                 app.saveSettings();
                 app.applySettings();
             });
@@ -1550,10 +1776,25 @@ const app = {
         const compactToggle = document.getElementById('compact-mode-toggle');
         if (compactToggle) {
             compactToggle.checked = app.settings.compactMode;
-            compactToggle.addEventListener('change', (e) => {
+            if (app.settings.compactMode) document.body.classList.add('compact-mode');
+            compactToggle.addEventListener('change', async (e) => {
                 app.settings.compactMode = e.target.checked;
-                app.saveSettings();
-                app.applySettings();
+                if (app.settings.compactMode) document.body.classList.add('compact-mode');
+                else document.body.classList.remove('compact-mode');
+                await window.electronAPI.saveSettings(app.settings);
+            });
+        }
+
+        // Always On Top
+        const aotToggle = document.getElementById('always-on-top-toggle');
+        if (aotToggle) {
+            window.electronAPI.getAlwaysOnTopSetting().then(isAot => {
+                aotToggle.checked = isAot;
+                app.settings.alwaysOnTop = isAot;
+            });
+            aotToggle.addEventListener('change', async (e) => {
+                await window.electronAPI.setAlwaysOnTopSetting(e.target.checked);
+                app.settings.alwaysOnTop = e.target.checked;
             });
         }
 
@@ -1685,14 +1926,32 @@ const app = {
 
             fileSyncEl.addEventListener('change', async (e) => {
                 const enabled = e.target.checked;
-                app.settings.fileSync = enabled;
+                // app.settings.fileSync = enabled; // Handled in toggle-file-sync response if successful?
+                // Actually better to wait for main process confirmation
+                try {
+                    const result = await window.electronAPI.toggleFileSync(enabled);
+                    app.settings.fileSync = result;
+                    app.saveSettings();
+                } catch (err) {
+                    console.error("Failed to toggle file sync", err);
+                    e.target.checked = !enabled; // Revert
+                }
+            });
+        }
+
+        // Custom Title Bar
+        const customTitleBarToggle = document.getElementById('custom-titlebar-toggle');
+        if (customTitleBarToggle) {
+            customTitleBarToggle.checked = app.settings.customTitleBar !== false;
+            customTitleBarToggle.addEventListener('change', (e) => {
+                app.settings.customTitleBar = e.target.checked;
                 app.saveSettings();
-                await window.electronAPI.toggleFileSync(enabled);
+                CustomModal.alert("Please restart the app for this change to take effect.");
             });
         }
 
         bindToggle('media-keys-toggle', 'mediaKeys');
-        bindToggle('media-keys-toggle', 'mediaKeys');
+        bindToggle('middle-click-toggle', 'middleClick');
 
         // Developer Mode Logic
         const debugToggle = document.getElementById('debug-logs-toggle');
@@ -1721,7 +1980,11 @@ const app = {
             });
 
             openToolsBtn.addEventListener('click', () => {
+                openToolsBtn.textContent = "Opening...";
                 window.electronAPI.setDebugMode(true);
+                setTimeout(() => {
+                    openToolsBtn.textContent = "Open Tools";
+                }, 2000);
             });
         }
 
@@ -1746,6 +2009,100 @@ const app = {
         app.applySettings();
     },
 
+    setupUpdates: () => {
+        const updateArea = document.getElementById('update-status-area');
+        const statusText = document.getElementById('update-status-text');
+        const checkBtn = document.getElementById('check-for-updates-btn');
+        const restartBtn = document.getElementById('restart-to-update-btn');
+        const manualDlBtn = document.getElementById('manual-download-btn');
+        const versionDisplay = document.getElementById('settings-version-display');
+        const autoToggle = document.getElementById('auto-update-toggle');
+        const progressBar = document.getElementById('update-progress-bar');
+        const progressContainer = document.getElementById('update-progress-container');
+        const progressPercent = document.getElementById('update-download-percent');
+
+        if (!checkBtn) return;
+
+        // Init Version
+        window.electronAPI.getVersion().then(ver => {
+            if (versionDisplay) versionDisplay.textContent = `v${ver}`;
+        });
+
+        // Init Auto-Update Toggle
+        window.electronAPI.getAutoUpdateStatus().then(enabled => {
+            if (autoToggle) {
+                autoToggle.checked = enabled;
+                autoToggle.addEventListener('change', (e) => {
+                    window.electronAPI.toggleAutoUpdate(e.target.checked);
+                });
+            }
+        });
+
+        // Manual Check
+        checkBtn.onclick = () => {
+            checkBtn.disabled = true;
+            statusText.textContent = "Checking...";
+            if (updateArea) updateArea.classList.remove('hidden');
+            window.electronAPI.checkForUpdates();
+            // Re-enable safety
+            setTimeout(() => { checkBtn.disabled = false; }, 5000);
+        };
+
+        if (manualDlBtn) {
+            manualDlBtn.onclick = () => {
+                manualDlBtn.classList.add('hidden');
+                window.electronAPI.downloadUpdate();
+            };
+        }
+
+        if (restartBtn) {
+            restartBtn.onclick = () => {
+                window.electronAPI.quitAndInstall();
+            };
+        }
+
+        // Listeners
+        window.electronAPI.onUpdateStatus((data) => {
+            if (updateArea) updateArea.classList.remove('hidden');
+            if (statusText) statusText.textContent = data.text;
+
+            // Handle States
+            if (data.status === 'checking') {
+                checkBtn.disabled = true;
+            } else {
+                checkBtn.disabled = false;
+            }
+
+            if (data.status === 'available') {
+                app.showToast(`Update available: v${data.info.version}`);
+                // If auto-update is off, show download button
+                if (autoToggle && !autoToggle.checked) {
+                    if (manualDlBtn) manualDlBtn.classList.remove('hidden');
+                }
+            } else if (data.status === 'downloaded') {
+                app.showToast('Update ready to install');
+                if (restartBtn) restartBtn.classList.remove('hidden');
+                if (progressContainer) progressContainer.classList.add('hidden');
+                if (statusText) statusText.textContent = "Update downloaded. Restart to install.";
+            } else if (data.status === 'error') {
+                // app.showToast('Update check failed');
+            } else if (data.status === 'not-available') {
+                if (data.info && data.info.version) {
+                    statusText.textContent = `You are up to date. Latest available: v${data.info.version}`;
+                }
+            }
+        });
+
+        window.electronAPI.onUpdateProgress((data) => {
+            if (updateArea) updateArea.classList.remove('hidden');
+            if (progressContainer) progressContainer.classList.remove('hidden');
+            const percent = Math.round(data.percent);
+            if (progressBar) progressBar.style.width = `${percent}%`;
+            if (progressPercent) progressPercent.textContent = `${percent}%`;
+            if (statusText) statusText.textContent = `Downloading... ${percent}%`;
+        });
+    },
+
     loadSettings: () => {
         const saved = localStorage.getItem('moadify-settings');
         if (saved) {
@@ -1763,62 +2120,385 @@ const app = {
     applySettings: () => {
         const r = document.querySelector(':root');
 
-        // Theme
-        const applyTheme = (theme) => {
-            if (theme === 'light') {
-                r.style.setProperty('--bg-color', '#ffffff');
-                r.style.setProperty('--sidebar-bg', '#f3f3f3');
-                r.style.setProperty('--card-bg', '#ffffff');
-                r.style.setProperty('--card-hover', '#e0e0e0');
-                r.style.setProperty('--player-bg', '#ffffff');
-                r.style.setProperty('--text-color', '#121212');
-                r.style.setProperty('--secondary-text', '#555555');
-                r.style.setProperty('--border-color', '#e0e0e0');
-                r.style.setProperty('--modal-bg', '#ffffff');
-                r.style.setProperty('--input-bg', '#f0f0f0');
-                r.style.setProperty('--hover-bg', 'rgba(0, 0, 0, 0.05)');
-                r.style.setProperty('--selected-bg', 'rgba(0, 0, 0, 0.1)');
-                r.style.setProperty('--context-menu-bg', '#ffffff');
-                r.style.setProperty('--search-bg', '#f3f3f3');
-                r.style.setProperty('--inverse-text', '#ffffff');
-                r.style.setProperty('--slider-bg', '#ccc');
-                r.style.setProperty('--switch-bg', '#ccc');
-                r.style.setProperty('--icon-filter', 'none');
-            } else {
-                // Dark (Default)
-                r.style.setProperty('--bg-color', '#121212');
-                r.style.setProperty('--sidebar-bg', '#000000');
-                r.style.setProperty('--card-bg', '#181818');
-                r.style.setProperty('--card-hover', '#282828');
-                r.style.setProperty('--player-bg', '#181818');
-                r.style.setProperty('--text-color', '#FFFFFF');
-                r.style.setProperty('--secondary-text', '#B3B3B3');
-                r.style.setProperty('--border-color', '#333');
-                r.style.setProperty('--modal-bg', '#282828');
-                r.style.setProperty('--input-bg', '#3E3E3E');
-                r.style.setProperty('--hover-bg', 'rgba(255, 255, 255, 0.1)');
-                r.style.setProperty('--selected-bg', 'rgba(255, 255, 255, 0.2)');
-                r.style.setProperty('--context-menu-bg', '#282828');
-                r.style.setProperty('--search-bg', '#2a2a2a');
-                r.style.setProperty('--inverse-text', '#000000');
-                r.style.setProperty('--slider-bg', '#555');
-                r.style.setProperty('--switch-bg', '#444');
-                r.style.setProperty('--icon-filter', 'invert(1)');
+        const themes = {
+            light: {
+                vars: {
+                    '--bg-color': '#ffffff',
+                    '--sidebar-bg': '#f3f3f3',
+                    '--card-bg': '#ffffff',
+                    '--card-hover': '#e0e0e0',
+                    '--player-bg': '#ffffff',
+                    '--text-color': '#121212',
+                    '--secondary-text': '#555555',
+                    '--border-color': '#e0e0e0',
+                    '--modal-bg': '#ffffff',
+                    '--input-bg': '#f0f0f0',
+                    '--hover-bg': 'rgba(0, 0, 0, 0.05)',
+                    '--selected-bg': 'rgba(0, 0, 0, 0.1)',
+                    '--context-menu-bg': '#ffffff',
+                    '--search-bg': '#f3f3f3',
+                    '--inverse-text': '#ffffff',
+                    '--slider-bg': '#ccc',
+                    '--switch-bg': '#ccc',
+                    '--icon-filter': 'none'
+                },
+                accentColor: '#007ACC'
+            },
+            dark: {
+                vars: {
+                    '--bg-color': '#121212',
+                    '--sidebar-bg': '#000000',
+                    '--card-bg': '#181818',
+                    '--card-hover': '#282828',
+                    '--player-bg': '#181818',
+                    '--text-color': '#FFFFFF',
+                    '--secondary-text': '#B3B3B3',
+                    '--border-color': '#333',
+                    '--modal-bg': '#282828',
+                    '--input-bg': '#3E3E3E',
+                    '--hover-bg': 'rgba(255, 255, 255, 0.1)',
+                    '--selected-bg': 'rgba(255, 255, 255, 0.2)',
+                    '--context-menu-bg': '#282828',
+                    '--search-bg': '#2a2a2a',
+                    '--inverse-text': '#000000',
+                    '--slider-bg': '#555',
+                    '--switch-bg': '#444',
+                    '--icon-filter': 'invert(1)'
+                },
+                accentColor: '#00E5FF'
+            },
+            midnight: {
+                vars: {
+                    '--bg-color': '#05070a',
+                    '--sidebar-bg': '#000000',
+                    '--card-bg': '#0f131a',
+                    '--card-hover': '#1a212d',
+                    '--player-bg': '#020406',
+                    '--text-color': '#c9d1d9',
+                    '--secondary-text': '#8b949e',
+                    '--border-color': '#21262d',
+                    '--modal-bg': '#0d1117',
+                    '--input-bg': '#161b22',
+                    '--hover-bg': 'rgba(121, 184, 255, 0.1)',
+                    '--selected-bg': 'rgba(121, 184, 255, 0.2)',
+                    '--context-menu-bg': '#0d1117',
+                    '--search-bg': '#161b22',
+                    '--inverse-text': '#000000',
+                    '--slider-bg': '#21262d',
+                    '--switch-bg': '#21262d',
+                    '--icon-filter': 'invert(1) hue-rotate(180deg)',
+                    '--bg-animation': 'none',
+                    '--bg-size': 'auto',
+                    '--active-glow': 'none'
+                },
+                accentColor: '#0077ffff'
+            },
+            aurora: {
+                vars: {
+                    '--bg-color': 'linear-gradient(135deg, #1a0b2e 0%, #16213e 50%, #0f3460 100%)',
+                    '--sidebar-bg': '#0a0a18',
+                    '--card-bg': 'rgba(255, 255, 255, 0.05)',
+                    '--card-hover': 'rgba(255, 255, 255, 0.1)',
+                    '--player-bg': '#0a0a18',
+                    '--text-color': '#ffffff',
+                    '--secondary-text': '#a0a0ff',
+                    '--border-color': 'rgba(255, 255, 255, 0.1)',
+                    '--modal-bg': '#16213e',
+                    '--input-bg': 'rgba(0, 0, 0, 0.3)',
+                    '--hover-bg': 'rgba(255, 255, 255, 0.1)',
+                    '--selected-bg': 'rgba(255, 255, 255, 0.2)',
+                    '--context-menu-bg': '#16213e',
+                    '--search-bg': 'rgba(0,0,0,0.3)',
+                    '--inverse-text': '#000000',
+                    '--slider-bg': 'rgba(255,255,255,0.2)',
+                    '--switch-bg': 'rgba(255,255,255,0.2)',
+                    '--icon-filter': 'invert(1)',
+                    '--bg-animation': 'none',
+                    '--bg-size': 'auto',
+                    '--active-glow': 'none'
+                },
+                accentColor: '#d2a8ff'
+            },
+            sunset: {
+                vars: {
+                    '--bg-color': 'linear-gradient(135deg, #4a1c40 0%, #b75d69 60%, #ffc4a3 100%)',
+                    '--sidebar-bg': '#2d1b2e',
+                    '--card-bg': 'rgba(255, 255, 255, 0.1)',
+                    '--card-hover': 'rgba(255, 255, 255, 0.2)',
+                    '--player-bg': '#1f1220',
+                    '--text-color': '#fff4e6',
+                    '--secondary-text': '#ffdac1',
+                    '--border-color': 'rgba(255, 255, 255, 0.2)',
+                    '--modal-bg': '#4a1c40',
+                    '--input-bg': 'rgba(0, 0, 0, 0.3)',
+                    '--hover-bg': 'rgba(255, 255, 255, 0.15)',
+                    '--selected-bg': 'rgba(255, 255, 255, 0.25)',
+                    '--context-menu-bg': '#4a1c40',
+                    '--search-bg': 'rgba(0,0,0,0.3)',
+                    '--inverse-text': '#4a1c40',
+                    '--slider-bg': 'rgba(255,255,255,0.3)',
+                    '--switch-bg': 'rgba(255,255,255,0.3)',
+                    '--icon-filter': 'invert(1) sepia(1) saturate(3) hue-rotate(300deg)',
+                    '--bg-animation': 'none',
+                    '--bg-size': 'auto',
+                    '--active-glow': 'none'
+                },
+                accentColor: '#ffca80'
+            },
+            'pure-black': {
+                vars: {
+                    '--bg-color': '#000000',
+                    '--sidebar-bg': '#000000',
+                    '--card-bg': '#111111',
+                    '--card-hover': '#222222',
+                    '--player-bg': '#000000',
+                    '--text-color': '#ffffff',
+                    '--secondary-text': '#888888',
+                    '--border-color': '#222',
+                    '--modal-bg': '#111',
+                    '--input-bg': '#222',
+                    '--hover-bg': 'rgba(255, 255, 255, 0.15)',
+                    '--selected-bg': 'rgba(255, 255, 255, 0.3)',
+                    '--context-menu-bg': '#111',
+                    '--search-bg': '#111',
+                    '--inverse-text': '#000000',
+                    '--slider-bg': '#333',
+                    '--switch-bg': '#333',
+                    '--icon-filter': 'invert(1)',
+                    '--bg-animation': 'none',
+                    '--bg-size': 'auto',
+                    '--active-glow': 'none'
+                },
+                accentColor: '#ffffff'
+            },
+            forest: {
+                vars: {
+                    '--bg-color': '#0a140d',
+                    '--sidebar-bg': '#050a06',
+                    '--card-bg': '#142018',
+                    '--card-hover': '#1e3024',
+                    '--player-bg': '#050a06',
+                    '--text-color': '#e0f0e0',
+                    '--secondary-text': '#80a080',
+                    '--border-color': '#1e3024',
+                    '--modal-bg': '#142018',
+                    '--input-bg': '#1e3024',
+                    '--hover-bg': 'rgba(100, 255, 100, 0.1)',
+                    '--selected-bg': 'rgba(100, 255, 100, 0.2)',
+                    '--context-menu-bg': '#142018',
+                    '--search-bg': '#142018',
+                    '--inverse-text': '#000000',
+                    '--slider-bg': '#2e4a36',
+                    '--switch-bg': '#2e4a36',
+                    '--icon-filter': 'invert(1) sepia(1) saturate(5) hue-rotate(90deg)',
+                    '--bg-animation': 'none',
+                    '--bg-size': 'auto',
+                    '--active-glow': 'none'
+                },
+                accentColor: '#4caf50'
+            },
+            'neon-night': {
+                vars: {
+                    '--bg-color': '#050505',
+                    '--sidebar-bg': '#000000',
+                    '--card-bg': '#0a0a0a',
+                    '--card-hover': '#141414',
+                    '--player-bg': '#000000',
+                    '--text-color': '#ffffff',
+                    '--secondary-text': '#00ffcc',
+                    '--border-color': '#333',
+                    '--modal-bg': '#0a0a0a',
+                    '--input-bg': '#111',
+                    '--hover-bg': 'rgba(0, 255, 204, 0.1)',
+                    '--selected-bg': 'rgba(0, 255, 204, 0.2)',
+                    '--context-menu-bg': '#0a0a0a',
+                    '--search-bg': '#111',
+                    '--inverse-text': '#000000',
+                    '--slider-bg': '#333',
+                    '--switch-bg': '#333',
+                    '--icon-filter': 'invert(1) drop-shadow(0 0 2px cyan)',
+                    '--bg-animation': 'none',
+                    '--bg-size': 'auto',
+                    '--active-glow': '0 0 10px var(--primary-color)'
+                },
+                accentColor: '#00ffcc'
+            },
+            frost: {
+                vars: {
+                    '--bg-color': '#f0f4f8',
+                    '--sidebar-bg': '#e1e8ef',
+                    '--card-bg': '#ffffff',
+                    '--card-hover': '#d9e2ec',
+                    '--player-bg': '#ffffff',
+                    '--text-color': '#102a43',
+                    '--secondary-text': '#486581',
+                    '--border-color': '#d9e2ec',
+                    '--modal-bg': '#f0f4f8',
+                    '--input-bg': '#d9e2ec',
+                    '--hover-bg': 'rgba(16, 42, 67, 0.05)',
+                    '--selected-bg': 'rgba(16, 42, 67, 0.1)',
+                    '--context-menu-bg': '#ffffff',
+                    '--search-bg': '#ffffff',
+                    '--inverse-text': '#ffffff',
+                    '--slider-bg': '#bcccdc',
+                    '--switch-bg': '#bcccdc',
+                    '--icon-filter': 'none',
+                    '--active-glow': 'none'
+                },
+                accentColor: '#334e68'
+            },
+            ember: {
+                vars: {
+                    '--bg-color': '#1f1a1a',
+                    '--sidebar-bg': '#141010',
+                    '--card-bg': '#292020',
+                    '--card-hover': '#362b2b',
+                    '--player-bg': '#141010',
+                    '--text-color': '#ffeaea',
+                    '--secondary-text': '#ff8a80',
+                    '--border-color': '#362b2b',
+                    '--modal-bg': '#292020',
+                    '--input-bg': '#362b2b',
+                    '--hover-bg': 'rgba(255, 87, 34, 0.1)',
+                    '--selected-bg': 'rgba(255, 87, 34, 0.2)',
+                    '--context-menu-bg': '#292020',
+                    '--search-bg': '#362b2b',
+                    '--inverse-text': '#000000',
+                    '--slider-bg': '#4e342e',
+                    '--switch-bg': '#4e342e',
+                    '--icon-filter': 'invert(1) sepia(1) saturate(5) hue-rotate(-30deg)',
+                    '--active-glow': '0 0 8px rgba(255, 87, 34, 0.6)'
+                },
+                accentColor: '#ff5722'
+            },
+            'deep-ocean': {
+                vars: {
+                    '--bg-color': 'linear-gradient(180deg, #02182b 0%, #032b4b 100%)',
+                    '--sidebar-bg': '#011220',
+                    '--card-bg': 'rgba(3, 43, 75, 0.5)',
+                    '--card-hover': 'rgba(3, 43, 75, 0.8)',
+                    '--player-bg': '#011220',
+                    '--text-color': '#e0f7fa',
+                    '--secondary-text': '#4fc3f7',
+                    '--border-color': 'rgba(79, 195, 247, 0.2)',
+                    '--modal-bg': '#02182b',
+                    '--input-bg': 'rgba(0, 0, 0, 0.3)',
+                    '--hover-bg': 'rgba(79, 195, 247, 0.1)',
+                    '--selected-bg': 'rgba(79, 195, 247, 0.2)',
+                    '--context-menu-bg': '#02182b',
+                    '--search-bg': 'rgba(0,0,0,0.3)',
+                    '--inverse-text': '#000000',
+                    '--slider-bg': 'rgba(255,255,255,0.2)',
+                    '--switch-bg': 'rgba(255,255,255,0.2)',
+                    '--icon-filter': 'invert(1) hue-rotate(180deg)',
+                    '--active-glow': 'none'
+                },
+                accentColor: '#00bcd4'
+            },
+            mono: {
+                vars: {
+                    '--bg-color': '#eaeaea',
+                    '--sidebar-bg': '#f5f5f5',
+                    '--card-bg': '#ffffff',
+                    '--card-hover': '#dedede',
+                    '--player-bg': '#ffffff',
+                    '--text-color': '#000000',
+                    '--secondary-text': '#666666',
+                    '--border-color': '#ccc',
+                    '--modal-bg': '#ffffff',
+                    '--input-bg': '#f5f5f5',
+                    '--hover-bg': 'rgba(0, 0, 0, 0.05)',
+                    '--selected-bg': 'rgba(0, 0, 0, 0.1)',
+                    '--context-menu-bg': '#ffffff',
+                    '--search-bg': '#f5f5f5',
+                    '--inverse-text': '#ffffff',
+                    '--slider-bg': '#999',
+                    '--switch-bg': '#999',
+                    '--icon-filter': 'grayscale(100%)',
+                    '--active-glow': 'none'
+                },
+                accentColor: '#333333'
+            },
+            galaxy: {
+                vars: {
+                    '--bg-color': 'linear-gradient(270deg, #1a0b2e, #4a1c40, #16213e)',
+                    '--bg-size': '600% 600%',
+                    '--bg-animation': 'galaxyGradient 30s ease infinite',
+                    '--sidebar-bg': 'rgba(10, 10, 24, 0.9)',
+                    '--card-bg': 'rgba(255, 255, 255, 0.05)',
+                    '--card-hover': 'rgba(255, 255, 255, 0.1)',
+                    '--player-bg': '#0f0f1b',
+                    '--text-color': '#ffffff',
+                    '--secondary-text': '#d2a8ff',
+                    '--border-color': 'rgba(255, 255, 255, 0.1)',
+                    '--modal-bg': '#16213e',
+                    '--input-bg': 'rgba(0, 0, 0, 0.4)',
+                    '--hover-bg': 'rgba(210, 168, 255, 0.1)',
+                    '--selected-bg': 'rgba(210, 168, 255, 0.2)',
+                    '--context-menu-bg': '#1a0b2e',
+                    '--search-bg': 'rgba(0,0,0,0.3)',
+                    '--inverse-text': '#000000',
+                    '--slider-bg': 'rgba(255,255,255,0.2)',
+                    '--switch-bg': 'rgba(255,255,255,0.2)',
+                    '--icon-filter': 'invert(1)',
+                    '--active-glow': 'none'
+                },
+                accentColor: '#d2a8ff'
+            },
+            'frosted-glass': {
+                vars: {
+                    '--bg-color': 'linear-gradient(135deg, #1f2937, #111827, #0f172a)',
+                    '--bg-size': '200% 200%',
+                    '--bg-animation': 'galaxyGradient 20s ease infinite',
+                    '--sidebar-bg': 'rgba(31, 41, 55, 0.4)',
+                    '--card-bg': 'rgba(255, 255, 255, 0.05)',
+                    '--card-hover': 'rgba(255, 255, 255, 0.1)',
+                    '--player-bg': 'rgba(17, 24, 39, 0.3)',
+                    '--text-color': '#f3f4f6',
+                    '--secondary-text': '#9ca3af',
+                    '--border-color': 'rgba(255, 255, 255, 0.1)',
+                    '--modal-bg': 'rgba(31, 41, 55, 0.7)',
+                    '--input-bg': 'rgba(0, 0, 0, 0.2)',
+                    '--hover-bg': 'rgba(255, 255, 255, 0.1)',
+                    '--selected-bg': 'rgba(255, 255, 255, 0.2)',
+                    '--context-menu-bg': 'rgba(31, 41, 55, 0.9)',
+                    '--search-bg': 'rgba(0, 0, 0, 0.2)',
+                    '--inverse-text': '#000000',
+                    '--slider-bg': 'rgba(255, 255, 255, 0.2)',
+                    '--switch-bg': 'rgba(255, 255, 255, 0.2)',
+                    '--icon-filter': 'invert(1)',
+                    '--active-glow': '0 0 10px rgba(255, 255, 255, 0.3)',
+                    '--backdrop-filter': 'blur(20px)'
+                },
+                accentColor: '#38bdf8'
             }
         };
 
-        if (app.settings.theme === 'light') {
-            applyTheme('light');
-        } else if (app.settings.theme === 'dark') {
-            applyTheme('dark');
-        } else {
-            // System default
-            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-                applyTheme('light');
-            } else {
-                applyTheme('dark');
+        // Expose themes to app for settings use
+        app.themes = themes;
+
+        const applyTheme = (themeName) => {
+            let theme = themes[themeName] || themes['dark'];
+
+            // Handle System
+            if (themeName === 'system') {
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+                    theme = themes['light'];
+                } else {
+                    theme = themes['dark'];
+                }
             }
-        }
+
+            // Apply Variables
+            Object.entries(theme.vars).forEach(([key, value]) => {
+                r.style.setProperty(key, value);
+            });
+
+            // Handle optional vars defaults
+            if (!theme.vars['--backdrop-filter']) r.style.setProperty('--backdrop-filter', 'none');
+        };
+
+        applyTheme(app.settings.theme);
 
         // Accent
         r.style.setProperty('--primary-color', app.settings.accentColor);
@@ -1845,7 +2525,20 @@ const app = {
             app.audio.setSinkId(app.settings.audioOutput).catch(e => console.warn(e));
         }
 
+        // Custom Title Bar
+        const titleBar = document.getElementById('title-bar');
+        // Use initial state to match current window frame
+        const useTitleBar = (typeof app.initialCustomTitleBar !== 'undefined')
+            ? app.initialCustomTitleBar
+            : app.settings.customTitleBar;
 
+        if (useTitleBar === false) {
+            if (titleBar) titleBar.classList.add('hidden');
+            r.style.setProperty('--title-bar-height', '0px');
+        } else {
+            if (titleBar) titleBar.classList.remove('hidden');
+            r.style.setProperty('--title-bar-height', '30px');
+        }
     }
 };
 

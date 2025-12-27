@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog, globalShortcut, Tray, Menu, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
@@ -16,25 +17,34 @@ let mainWindow;
 let tray;
 
 function createWindow() {
+    const settings = storage.getSettingsSync();
+    const useCustomTitleBar = settings.customTitleBar !== false;
+
     mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
-        minWidth: 800,
-        minHeight: 600,
-        frame: false, // Custom frame for modern look
-        backgroundColor: '#121212',
+        minWidth: 300,
+        minHeight: 120,
+        frame: !useCustomTitleBar, // false = custom (frameless), true = native
+        transparent: true,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
             contextIsolation: true,
             webSecurity: true,
             backgroundThrottling: false,
-            webviewTag: true
+            webviewTag: true,
+            devTools: true
         },
         icon: path.join(__dirname, 'icon.ico')
     });
 
     mainWindow.loadFile('index.html');
+
+    // Load Settings
+    if (settings.alwaysOnTop) {
+        mainWindow.setAlwaysOnTop(true);
+    }
 
     // mainWindow.webContents.openDevTools(); // For debugging
 
@@ -291,6 +301,14 @@ app.whenReady().then(() => {
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
+
+    // Auto-Update Check on Launch
+    const autoUpdate = settings.autoUpdate !== false; // Default true
+    autoUpdater.autoDownload = autoUpdate;
+    // Silent check
+    try {
+        autoUpdater.checkForUpdates().catch(e => console.log('Auto-update check failed', e));
+    } catch (e) { console.log('Auto-update error', e); }
 });
 
 app.on('before-quit', () => {
@@ -310,6 +328,19 @@ ipcMain.on('maximize-window', () => {
     else mainWindow.maximize();
 });
 ipcMain.on('close-window', () => mainWindow.close()); // This triggers the close event which hides to tray
+ipcMain.on('set-window-size', (event, { width, height, x, y }) => {
+    if (mainWindow) {
+        mainWindow.setSize(width, height);
+        if (x !== undefined && y !== undefined) {
+            mainWindow.setPosition(Math.round(x), Math.round(y));
+        }
+    }
+});
+ipcMain.on('set-always-on-top', (event, enable) => {
+    if (mainWindow) {
+        mainWindow.setAlwaysOnTop(enable);
+    }
+});
 
 // Library & Storage
 // Library & Storage
@@ -413,7 +444,7 @@ ipcMain.handle('reset-app', async () => {
 ipcMain.on('set-debug-mode', (event, enable) => {
     if (mainWindow) {
         if (enable) {
-            mainWindow.webContents.openDevTools({ mode: 'detach' });
+            mainWindow.webContents.openDevTools({ mode: 'detach', activate: true });
         } else {
             mainWindow.webContents.closeDevTools();
         }
@@ -437,4 +468,83 @@ ipcMain.handle('toggle-file-sync', async (event, enable) => {
 ipcMain.handle('get-file-sync-status', async () => {
     const settings = await storage.getSettings();
     return !!settings.fileSync;
+});
+
+// Auto-Updater Logic
+autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.allowPrerelease = true;
+
+function sendUpdateStatus(status, text, info = null) {
+    if (mainWindow) {
+        mainWindow.webContents.send('update-status', { status, text, info });
+    }
+}
+
+autoUpdater.on('checking-for-update', () => {
+    sendUpdateStatus('checking', 'Checking for updates...');
+});
+
+autoUpdater.on('update-available', (info) => {
+    // If autoDownload is true, it starts downloading automatically
+    // We notify the UI regardless
+    sendUpdateStatus('available', `Update available: v${info.version}`, info);
+});
+
+autoUpdater.on('update-not-available', (info) => {
+    sendUpdateStatus('not-available', 'You are up to date.', info);
+});
+
+autoUpdater.on('error', (err) => {
+    sendUpdateStatus('error', 'Error: ' + (err.message || err));
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+    if (mainWindow) {
+        mainWindow.webContents.send('update-progress', progressObj);
+    }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+    sendUpdateStatus('downloaded', 'Update downloaded. Restart to install.', info);
+});
+
+ipcMain.on('check-for-updates', async () => {
+    const settings = await storage.getSettings();
+    autoUpdater.autoDownload = settings.autoUpdate !== false;
+    autoUpdater.checkForUpdates();
+});
+
+ipcMain.on('download-update', () => {
+    autoUpdater.downloadUpdate();
+});
+
+ipcMain.on('quit-and-install', () => {
+    autoUpdater.quitAndInstall();
+});
+
+ipcMain.handle('get-auto-update-setting', async () => {
+    const settings = await storage.getSettings();
+    return settings.autoUpdate !== false;
+});
+
+ipcMain.on('set-auto-update-setting', async (event, enable) => {
+    const settings = await storage.getSettings();
+    settings.autoUpdate = enable;
+    await storage.saveSettings(settings);
+    autoUpdater.autoDownload = enable;
+});
+
+ipcMain.handle('set-always-on-top-setting', async (event, enable) => {
+    const settings = await storage.getSettings();
+    settings.alwaysOnTop = enable;
+    await storage.saveSettings(settings);
+    if (mainWindow) {
+        mainWindow.setAlwaysOnTop(enable);
+    }
+    return enable;
+});
+
+ipcMain.handle('get-always-on-top-setting', async () => {
+    const settings = await storage.getSettings();
+    return !!settings.alwaysOnTop;
 });

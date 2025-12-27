@@ -28,6 +28,12 @@
                     <div id="download-list"></div>
                 </div>
             </div>
+            <button id="mini-player-btn" class="control-btn" title="Mini Player">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                        d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .88-2 1.98V19c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z" />
+                </svg>
+            </button>
             <button id="min-btn" class="control-btn" title="Minimize">&minus;</button>
             <button id="max-btn" class="control-btn" title="Maximize">&#9633;</button>
             <button id="close-btn" class="control-btn" title="Close">&times;</button>
@@ -144,7 +150,7 @@
             <div class="playlist-header-info">
                 <img id="playlist-cover" src="" alt="Playlist Art" class="playlist-art-large">
                 <div class="playlist-details">
-                    <span class="playlist-type">Playlist</span>
+                    <span id="playlist-type-label" class="playlist-type">Playlist</span>
                     <h1 id="playlist-title">My Playlist</h1>
                     <p id="playlist-stats">0 songs</p>
                 </div>
@@ -196,6 +202,18 @@
                                 <option value="dark">Dark</option>
                                 <option value="light">Light</option>
                                 <option value="system">System</option>
+                                <option value="midnight">Midnight</option>
+                                <option value="aurora">Aurora</option>
+                                <option value="sunset">Sunset</option>
+                                <option value="pure-black">Pure Black</option>
+                                <option value="forest">Forest</option>
+                                <option value="neon-night">Neon Night</option>
+                                <option value="frost">Frost</option>
+                                <option value="ember">Ember</option>
+                                <option value="deep-ocean">Deep Ocean</option>
+                                <option value="mono">Mono</option>
+                                <option value="galaxy">Galaxy</option>
+                                <option value="frosted-glass">Frosted Glass</option>
                             </select>
                         </div>
                         <div class="setting-row">
@@ -225,12 +243,32 @@
                                 <span class="slider round"></span>
                             </label>
                         </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Custom Title Bar</div>
+                                <div class="setting-desc">Use the immersive custom title bar (Requires Restart)</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="custom-titlebar-toggle" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Always on Top</div>
+                                <div class="setting-desc">Keep the window floating above other windows</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="always-on-top-toggle">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Audio -->
+                <!-- Playback -->
                 <div class="settings-section">
-                    <h2>Audio</h2>
+                    <h2>Playback</h2>
                     <div class="setting-card">
                         <div class="setting-row">
                             <div class="setting-info">
@@ -248,6 +286,17 @@
                             </div>
                             <input type="range" id="crossfade-slider" min="0" max="10" step="1" value="0"
                                 class="setting-range">
+                        </div>
+
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Middle-Click to Play</div>
+                                <div class="setting-desc">Instantly play song with middle mouse button</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="middle-click-toggle" checked>
+                                <span class="slider round"></span>
+                            </label>
                         </div>
 
                     </div>
@@ -348,6 +397,58 @@
                     </div>
                 </div>
 
+                <!-- Updates -->
+                <div class="settings-section">
+                    <h2>Updates</h2>
+                    <div class="setting-card">
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Current Version</div>
+                                <div class="setting-desc" id="settings-version-display">Checking...</div>
+                            </div>
+                            <button id="check-for-updates-btn" class="secondary-btn small">Check for updates</button>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Auto-update</div>
+                                <div class="setting-desc">Automatically download and install updates</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="auto-update-toggle" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+
+                        <!-- Update Status Area -->
+                        <div id="update-status-area" class="hidden"
+                            style="padding: 15px; border-top: 1px solid var(--border-color); margin-top: 0px;">
+                            <div id="update-status-text"
+                                style="margin-bottom: 5px; font-size: 13px; color: var(--text-color);">Checking...</div>
+
+                            <div id="update-progress-container" class="hidden" style="width: 100%; margin-top: 10px;">
+                                <div
+                                    style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:11px; color:var(--secondary-text);">
+                                    <span>Downloading...</span>
+                                    <span id="update-download-percent">0%</span>
+                                </div>
+                                <div
+                                    style="width: 100%; height: 4px; background: var(--slider-bg); border-radius: 2px;">
+                                    <div id="update-progress-bar"
+                                        style="width: 0%; height: 100%; background: var(--primary-color); border-radius: 2px; transition: width 0.2s;">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="update-action-buttons" style="margin-top: 10px; display: flex; gap: 10px;">
+                                <button id="restart-to-update-btn" class="primary-btn hidden"
+                                    style="font-size: 12px; padding: 8px 16px; margin-top:0;">Restart to Update</button>
+                                <button id="manual-download-btn" class="primary-btn hidden"
+                                    style="font-size: 12px; padding: 8px 16px; margin-top:0;">Download Update</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- About -->
                 <div class="settings-section">
                     <h2>About</h2>
@@ -412,6 +513,18 @@
                 <input type="range" id="seek-bar" value="0" min="0" max="100">
                 <span id="total-time">0:00</span>
             </div>
+            <button id="pip-btn" class="player-btn hidden" title="Always on Top"
+                style="position: absolute; top: 10px; right: 45px; z-index: 200;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
+                </svg>
+            </button>
+            <button id="restore-mini-btn" class="player-btn hidden" title="Expand"
+                style="position: absolute; top: 10px; right: 10px; z-index: 200;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M4 15h8v-6H4v6zm-2 2h12V7H2v10zm19-8v6h-8v-6h8zm2-2H11v10h12V7z" />
+                </svg>
+            </button>
         </div>
 
         <div class="volume-controls">
@@ -493,7 +606,6 @@
     </div>
 
 
-    <!-- Custom System Modal -->
     <div id="custom-modal" class="modal hidden">
         <div class="modal-content">
             <h2 id="custom-modal-title">Notification</h2>
@@ -507,6 +619,9 @@
             </div>
         </div>
     </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
     <script src="browser-polyfill.js"></script>

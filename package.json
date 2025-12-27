@@ -1,6 +1,6 @@
 {
   "name": "moadify",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "A local offline music player with a Spotify like UI",
   "main": "main.js",
   "scripts": {
@@ -27,9 +27,21 @@
   },
   "build": {
     "appId": "com.moadify.app",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "moade771",
+        "repo": "Moadify"
+      }
+    ],
     "win": {
       "target": "nsis",
-      "icon": "icon.ico"
+      "icon": "icon.ico",
+      "artifactName": "${productName}.Setup.${version}.${ext}"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moade771/Moadify"
   }
 }

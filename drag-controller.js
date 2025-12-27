@@ -44,6 +44,11 @@ class DragController {
             this.view = 'library';
             this.container = libraryList;
         } else if (playlistList && playlistList.contains(row)) {
+            // Disable dragging in Album View (which reuses playlist container)
+            const typeLabel = document.getElementById('playlist-type-label');
+            if (typeLabel && typeLabel.textContent === 'Album') {
+                return;
+            }
             this.view = 'playlist';
             this.container = playlistList;
         } else {
@@ -349,56 +354,13 @@ class DragController {
     }
 
     async executeReorder() {
-        // Get current list of ID
-        let currentList = [];
-        if (this.view === 'library') {
-            currentList = app.library.map(s => s.id);
-        } else if (this.view === 'playlist') {
-            const playlistTitle = document.getElementById('playlist-title').textContent;
-            const playlist = app.playlists.find(p => p.name === playlistTitle);
-            if (!playlist) return;
-            currentList = playlist.songs; // These are IDs
-        }
-
-        // Remove dragged items
-        const newOrder = currentList.filter(id => !this.draggedSongIds.includes(id));
-
-        // Insert at target index
-        // We need to adjust target index because removing items shifts indices
-        // But logic is cleaner if we map visual index to logic.
-        // The targetIndex is based on visual rows (which include the dragged ones? No, usually not if we didn't hide them).
-        // Wait, I didn't hide the dragged items. So visual index includes them.
-
-        // Correct approach:
-        // Get all song IDs from the DOM (excluding the ghost/indicator) IN ORDER.
-        // The DOM currently has the Indicator in the new position.
-        // We can just iterate the DOM rows to get the new order, IGNORING the `draggedSongIds` old positions?
-        // No, I didn't move the actual DOM rows of dragged items. They stayed in place.
-        // So I rely on `this.targetIndex` relative to the list layout.
-
-        // Let's refine targetIndex logic.
-        // `targetIndex` is the index in the Visual List where we want to insert.
-        // Since we didn't remove rows from DOM, the indices match the current state.
-        // But we need to account for whether the dragged items were BEFORE the target index.
-
-        // Easier way: 
-        // 1. Get List of all IDs currently in DOM.
-        // 2. Remove dragged IDs.
-        // 3. Insert dragged IDs at processed index.
-
-        // Calculate insert position in the filtered list.
-        // The `targetRow` used for `targetIndex` calculation tells us where to drop.
-
-        // Let's just use the `dropIndicator`. It is in the DOM.
-        // We can iterate over children of container.
-        // Construct new ID list.
+        // Collect new ID order from DOM
         const container = this.container;
         const newIdList = [];
         const siblings = Array.from(container.children);
 
         for (const child of siblings) {
             if (child === this.dropIndicator) {
-                // Insert dragged items here
                 newIdList.push(...this.draggedSongIds);
             }
             if (child.classList.contains('song-row')) {
@@ -409,33 +371,71 @@ class DragController {
             }
         }
 
-        // Apply changes
+        // Identify if we need to update playback queue
+        let shouldUpdateQueue = false;
+        let newQueue = [];
+        const currentSong = app.queue[app.currentIndex]; // Track current song to restore index
+
         if (this.view === 'library') {
-            // Reorder app.library based on newIdList
+            const previousQueue = app.queue;
+            // Check if queue WAS the library (before update)
+            const isPlayingLibrary = (previousQueue === app.library);
+
             const newLibrary = [];
-            // Map IDs back to objects
-            // Use a map for O(1) lookup
             const libMap = new Map(app.library.map(s => [s.id, s]));
 
             for (const id of newIdList) {
                 if (libMap.has(id)) newLibrary.push(libMap.get(id));
             }
 
-            // Any missing? (Shouldn't be, but safety)
-            // If dragging items that were not in view? No, we drag only visible.
-
             app.library = newLibrary;
-            app.renderLibrary(); // Re-render to persist order visual
-            app.debouncedSaveLibrary(); // Save
+            app.renderLibrary();
+            app.debouncedSaveLibrary();
+
+            if (isPlayingLibrary) {
+                shouldUpdateQueue = true;
+                newQueue = newLibrary;
+            }
 
         } else if (this.view === 'playlist') {
-            const playlistTitle = document.getElementById('playlist-title').textContent;
-            const playlist = app.playlists.find(p => p.name === playlistTitle);
+            const playlistId = document.getElementById('playlist-view').dataset.playlistId;
+            const playlist = app.playlists.find(p => p.id === playlistId);
+
             if (playlist) {
+                const oldPlaylistIds = playlist.songs;
+
+                // Check if playing this playlist
+                // Heuristic: Check if IDs match.
+                const queueIds = app.queue.map(s => s.id);
+                const isPlayingPlaylist = (JSON.stringify(queueIds) === JSON.stringify(oldPlaylistIds));
+
                 playlist.songs = newIdList;
                 await window.electronAPI.savePlaylists(app.playlists);
-                // Refresh view
                 app.openPlaylist(playlist);
+
+                if (isPlayingPlaylist) {
+                    shouldUpdateQueue = true;
+                    // Reconstruct queue objects
+                    const libMap = new Map(app.library.map(s => [s.id, s]));
+                    newQueue = newIdList.map(id => libMap.get(id)).filter(s => s);
+                }
+            }
+        }
+
+        if (shouldUpdateQueue && newQueue.length > 0) {
+            app.queue = newQueue;
+            // Restore current index
+            if (currentSong) {
+                const newIndex = newQueue.findIndex(s => s.id === currentSong.id);
+                if (newIndex !== -1) {
+                    app.currentIndex = newIndex;
+                    console.log('Playback queue and index updated to match new order.');
+                } else {
+                    // Song no longer in list (impossible on reorder, maybe on delete)
+                    app.currentIndex = 0;
+                }
+            } else {
+                app.currentIndex = 0;
             }
         }
     }
