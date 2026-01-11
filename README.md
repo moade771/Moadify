@@ -10,7 +10,7 @@ A simple open source music player for windows. With user friendly interface and 
 ## Installation
 
 - Download the latest version from the [Releases](https://github.com/moade771/Moadify/releases) 
-- Run the installer: `Moadify-Setup-X.X.X.exe`  
+- Run the installer: `Moadify.Setup.X.X.X.exe`  
 - Launch the app and you're good to go 🚀
 
     
