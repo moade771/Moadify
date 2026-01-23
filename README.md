@@ -22,8 +22,6 @@ A simple open source music player for windows. With user friendly interface and 
 
 ![App Screenshot](https://raw.githubusercontent.com/moade771/Moadify/refs/heads/main/screenshots/3.PNG)
 
-![App Screenshot](https://raw.githubusercontent.com/moade771/Moadify/refs/heads/main/screenshots/DC.PNG)
-
 ## Features
 
 - Offline local music playback (MP3, WAV, FLAC, OGG, AAC) 
