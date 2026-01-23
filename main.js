@@ -11,7 +11,7 @@ const DiscordRPC = require('./src/discord');
 const storage = new Storage(app.getPath('userData'));
 
 // Initialize Discord RPC (Replace with your actual Client ID)
-const discordRpc = new DiscordRPC('123456789012345678');
+const discordRpc = new DiscordRPC('1446922918654115920');
 
 let mainWindow;
 let tray;
@@ -173,7 +173,7 @@ async function checkFileIntegrity() {
             await fs.promises.access(song.path);
             newLibrary.push(song);
         } catch (e) {
-            libraryChanged = true;
+            // libraryChanged = true; // DISABLED SAFETY: Do not auto-delete files if missing.
             // console.log(`Removing missing file: ${song.path}`);
         }
     }
@@ -192,7 +192,7 @@ async function checkFileIntegrity() {
             await fs.promises.access(song.path);
             newHistory.push(song);
         } catch (e) {
-            historyChanged = true;
+            // historyChanged = true; // DISABLED SAFETY
         }
     }
 
@@ -303,12 +303,17 @@ app.whenReady().then(() => {
     });
 
     // Auto-Update Check on Launch
+    // Auto-Update Check on Launch
     const autoUpdate = settings.autoUpdate !== false; // Default true
     autoUpdater.autoDownload = autoUpdate;
-    // Silent check
-    try {
-        autoUpdater.checkForUpdates().catch(e => console.log('Auto-update check failed', e));
-    } catch (e) { console.log('Auto-update error', e); }
+
+    // Check for updates on startup if enabled
+    if (settings.autoCheckUpdate !== false) {
+        // Silent check
+        try {
+            autoUpdater.checkForUpdates().catch(e => console.log('Auto-update check failed', e));
+        } catch (e) { console.log('Auto-update error', e); }
+    }
 });
 
 app.on('before-quit', () => {
@@ -387,7 +392,57 @@ ipcMain.handle('parse-metadata', async (event, filePath) => {
 
 // Discord RPC
 ipcMain.on('discord-set-activity', (event, activity) => {
-    discordRpc.setActivity(activity.details, activity.state);
+    discordRpc.setActivity(activity.details, activity.state, activity.largeImageKey, activity.largeImageText);
+});
+
+ipcMain.on('discord-clear-activity', () => {
+    discordRpc.clearActivity();
+});
+
+ipcMain.handle('fetch-online-cover', async (event, query) => {
+    // Check Cache first
+    const coverCache = await storage.getCoverCache();
+    if (coverCache[query]) {
+        // console.log('Found in cache:', query);
+        return coverCache[query];
+    }
+
+    try {
+        const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`);
+        const data = await response.json();
+        if (data.results && data.results.length > 0) {
+            const url = data.results[0].artworkUrl100.replace('100x100bb', '512x512bb');
+
+            // Save to Cache
+            coverCache[query] = url;
+            await storage.saveCoverCache(coverCache);
+
+            return url;
+        }
+    } catch (e) {
+        // console.error('Fetch error:', e);
+    }
+    return null;
+});
+
+ipcMain.handle('fetch-online-metadata', async (event, query) => {
+    try {
+        const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`);
+        const data = await response.json();
+        if (data.results && data.results.length > 0) {
+            const result = data.results[0];
+            return {
+                title: result.trackName,
+                artist: result.artistName,
+                album: result.collectionName,
+                cover: result.artworkUrl100.replace('100x100bb', '512x512bb'),
+                year: result.releaseDate ? new Date(result.releaseDate).getFullYear() : undefined
+            };
+        }
+    } catch (e) {
+        // console.error('Fetch error:', e);
+    }
+    return null;
 });
 
 // Cover Art Upload
@@ -532,6 +587,17 @@ ipcMain.on('set-auto-update-setting', async (event, enable) => {
     settings.autoUpdate = enable;
     await storage.saveSettings(settings);
     autoUpdater.autoDownload = enable;
+});
+
+ipcMain.handle('get-auto-check-update-setting', async () => {
+    const settings = await storage.getSettings();
+    return settings.autoCheckUpdate !== false;
+});
+
+ipcMain.on('set-auto-check-update-setting', async (event, enable) => {
+    const settings = await storage.getSettings();
+    settings.autoCheckUpdate = enable;
+    await storage.saveSettings(settings);
 });
 
 ipcMain.handle('set-always-on-top-setting', async (event, enable) => {

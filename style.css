@@ -1262,18 +1262,55 @@ input:checked+.slider:before {
 
 
 /* Compact Mode */
+body.compact {
+    --player-height: 70px;
+}
+
 body.compact .song-row {
-    padding: 4px 15px;
+    padding: 6px 15px;
     font-size: 13px;
+    border-radius: 4px;
 }
 
 body.compact .playlist-item {
-    padding: 4px 15px;
+    padding: 6px 15px;
+    font-size: 13px;
 }
 
 body.compact .nav-btn {
     padding: 6px 15px;
+    font-size: 13px;
+    margin-bottom: 2px;
 }
+
+body.compact .section-title {
+    font-size: 18px;
+    margin-bottom: 12px;
+}
+
+body.compact .home-section {
+    margin-bottom: 25px;
+}
+
+body.compact .setting-row {
+    padding: 10px 15px;
+}
+
+body.compact #np-cover {
+    width: 48px;
+    height: 48px;
+}
+
+body.compact .header-content h1 {
+    font-size: 24px;
+}
+
+body.compact .scroll-item {
+    min-width: 130px;
+    width: 130px;
+    padding: 10px;
+}
+
 
 /* Sidebar Autohide */
 #sidebar.autohide {
@@ -1455,19 +1492,7 @@ body:has(#sidebar.autohide) #main-content {
 }
 
 
-/* Compact Mode */
-body.compact .song-row {
-    padding: 4px 15px;
-    font-size: 13px;
-}
 
-body.compact .playlist-item {
-    padding: 4px 15px;
-}
-
-body.compact .nav-btn {
-    padding: 6px 15px;
-}
 
 /* Sidebar Autohide */
 #sidebar.autohide {

@@ -1,6 +1,6 @@
 {
   "name": "moadify",
-  "version": "0.8.0",
+  "version": "0.8.9",
   "description": "A local offline music player with a Spotify like UI",
   "main": "main.js",
   "scripts": {

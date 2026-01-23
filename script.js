@@ -25,13 +25,13 @@ const app = {
         try {
             // Load data
             const loadedLibrary = await window.electronAPI.getLibrary();
-            app.library = Array.isArray(loadedLibrary) ? loadedLibrary : [];
+            app.library = Array.isArray(loadedLibrary) ? loadedLibrary.filter(i => i) : [];
 
             const loadedPlaylists = await window.electronAPI.getPlaylists();
-            app.playlists = Array.isArray(loadedPlaylists) ? loadedPlaylists : [];
+            app.playlists = Array.isArray(loadedPlaylists) ? loadedPlaylists.filter(i => i) : [];
 
             const loadedHistory = await window.electronAPI.getHistory();
-            app.recentlyPlayed = Array.isArray(loadedHistory) ? loadedHistory : [];
+            app.recentlyPlayed = Array.isArray(loadedHistory) ? loadedHistory.filter(i => i) : [];
 
             // Setup Event Listeners
             app.audio = app.audioA;
@@ -85,22 +85,15 @@ const app = {
                     if (dynamicMenu) dynamicMenu.remove();
                 }
 
-                // 2. Click Outside to Deselect
+                // 2. Click Anywhere to Deselect
                 // Only process if we are in a view with selectable items
                 if (['library', 'playlist'].includes(app.currentView)) {
-                    // Check if click is within the main content area where songs live
-                    const isMainContent = e.target.closest('#main-content');
+                    // Don't deselect if clicking on a song row (handled by its own listener)
+                    if (e.target.closest('.song-row')) return;
 
-                    // If clicking outside main content (sidebar, player bar, modals), do nothing
-                    if (!isMainContent) return;
-
-                    const isSongRow = e.target.closest('.song-row');
-                    // If clicking a song row, selection is handled by handleSongClick
-                    if (isSongRow) return;
-
-                    // Check for interactive elements (buttons, inputs) to prevent accidental deselect
-                    // Note: Context menus and Modals are outside #main-content, so they are already excluded.
-                    const isInteractive = e.target.closest('button, input, select, a');
+                    // Don't deselect if interacting with UI controls
+                    // Includes buttons, inputs, links, modals, sidebar items, and context menus
+                    const isInteractive = e.target.closest('button, input, select, a, textarea, .modal, .playlist-item, .context-menu');
 
                     if (!isInteractive) {
                         if (app.selectedSongs.size > 0) {
@@ -109,6 +102,11 @@ const app = {
                         }
                     }
                 }
+            });
+
+            // Ensure data is saved before close
+            window.addEventListener('beforeunload', () => {
+                app.saveLibraryImmediate();
             });
         } catch (e) {
             console.error("Initialization Error:", e);
@@ -414,9 +412,16 @@ const app = {
     debouncedSaveLibrary: () => {
         if (app.saveTimeout) clearTimeout(app.saveTimeout);
         app.saveTimeout = setTimeout(async () => {
-            await window.electronAPI.saveLibrary(app.library);
+            app.saveLibraryImmediate();
+        }, 1000);
+    },
+
+    saveLibraryImmediate: async () => {
+        if (app.saveTimeout) {
+            clearTimeout(app.saveTimeout);
             app.saveTimeout = null;
-        }, 2000);
+        }
+        await window.electronAPI.saveLibrary(app.library);
     },
 
     setupIPC: () => {
@@ -596,8 +601,45 @@ const app = {
                 }
 
                 try {
-                    const song = await window.electronAPI.parseMetadata(data.path);
+                    let song = await window.electronAPI.parseMetadata(data.path);
                     if (song) {
+                        // Auto-tagging logic
+                        const autoTagEnabled = app.settings.autoTag;
+                        const missingAlbum = song.album === 'Unknown Album';
+                        const missingArtist = song.artist === 'Unknown Artist';
+                        const missingTitle = song.title === 'Unknown Title';
+                        const missingCover = !song.cover;
+
+                        // Trigger if autoTag is ON and ANY info is missing, OR if Album is missing (legacy behavior)
+                        if ((autoTagEnabled && (missingAlbum || missingArtist || missingTitle || missingCover)) || missingAlbum) {
+                            let query = '';
+
+                            // parsing filename if title/artist are also unknown could be an option, 
+                            // but usually at least title is ok. 
+                            // If downloaded from spotdown, filename is usually "Artist - Title"
+                            if (!missingArtist && !missingTitle) {
+                                query = `${song.artist} ${song.title}`;
+                            } else {
+                                // Use filename as fallback query
+                                query = data.filename.replace(/\.[^/.]+$/, "").replace(/_/g, ' ');
+                            }
+
+                            if (query) {
+                                const onlineData = await window.electronAPI.fetchOnlineMetadata(query);
+                                if (onlineData) {
+                                    // Update fields if they were missing or if we are in aggressive mode and found better info
+                                    if (missingAlbum && onlineData.album) song.album = onlineData.album;
+
+                                    if (autoTagEnabled) {
+                                        if (missingArtist && onlineData.artist) song.artist = onlineData.artist;
+                                        if (missingTitle && onlineData.title) song.title = onlineData.title;
+                                    }
+
+                                    if (!song.cover && onlineData.cover) song.cover = onlineData.cover;
+                                }
+                            }
+                        }
+
                         const exists = app.library.some(s => s.path === song.path);
                         if (!exists) {
                             app.library.push(song);
@@ -1302,6 +1344,68 @@ const app = {
             }
         };
 
+        const autoFillBtn = document.getElementById('auto-fill-btn');
+        if (autoFillBtn) {
+            autoFillBtn.onclick = async () => {
+                autoFillBtn.textContent = "Searching...";
+                autoFillBtn.disabled = true;
+
+                try {
+                    const currentTitle = document.getElementById('edit-title').value;
+                    const currentArtist = document.getElementById('edit-artist').value;
+
+                    let query = '';
+                    // Try to construct query from existing info if valid
+                    if (currentArtist && currentArtist !== 'Unknown Artist') query += currentArtist + ' ';
+                    if (currentTitle && currentTitle !== 'Unknown Title') query += currentTitle;
+
+                    // Fallback to filename if completely empty (though usually we have title from filename)
+                    if (!query.trim() || query.trim().length < 3) {
+                        // Extract from path if available
+                        if (song.path) {
+                            query = song.path.split(/[\\/]/).pop().replace(/\.[^/.]+$/, "").replace(/_/g, ' ');
+                        }
+                    }
+
+                    if (query) {
+                        const data = await window.electronAPI.fetchOnlineMetadata(query);
+                        if (data) {
+                            const titleInput = document.getElementById('edit-title');
+                            const artistInput = document.getElementById('edit-artist');
+                            const albumInput = document.getElementById('edit-album');
+                            const coverImg = document.getElementById('edit-cover-preview');
+
+                            if (data.title && (titleInput.value === '' || titleInput.value === 'Unknown Title')) {
+                                titleInput.value = data.title;
+                            }
+                            if (data.artist && (artistInput.value === '' || artistInput.value === 'Unknown Artist')) {
+                                artistInput.value = data.artist;
+                            }
+                            if (data.album && (albumInput.value === '' || albumInput.value === 'Unknown Album')) {
+                                albumInput.value = data.album;
+                            }
+
+                            // Only update cover if currently empty or placeholder
+                            const currentSrc = coverImg.src;
+                            if (data.cover && (!currentSrc || currentSrc.includes('placeholder') || currentSrc.includes('data:image/svg'))) {
+                                newCover = data.cover;
+                                coverImg.src = newCover;
+                            }
+                            app.showToast('Auto-fill successful');
+                        } else {
+                            app.showToast('No match found');
+                        }
+                    }
+                } catch (e) {
+                    console.error(e);
+                    app.showToast('Auto-fill failed');
+                } finally {
+                    autoFillBtn.textContent = "Auto-Fill";
+                    autoFillBtn.disabled = false;
+                }
+            };
+        }
+
         document.getElementById('save-edit-btn').onclick = async () => {
             song.title = document.getElementById('edit-title').value;
             song.artist = document.getElementById('edit-artist').value;
@@ -1424,6 +1528,9 @@ const app = {
     },
 
     playImmediate: (song) => {
+        // Clear RPC status momentarily to ensure updates are registered and desired 'restart' behavior occurs
+        window.electronAPI.clearDiscordActivity();
+
         if (app.fadeInterval) {
             clearInterval(app.fadeInterval);
             app.fadeInterval = null;
@@ -1449,6 +1556,9 @@ const app = {
 
     performCrossfade: (song, duration) => {
         if (app.fadeInterval) clearInterval(app.fadeInterval);
+
+        // Ensure RPC clears exactly like playImmediate
+        window.electronAPI.clearDiscordActivity();
 
         const outgoing = app.audio;
         const incoming = (app.audio === app.audioA) ? app.audioB : app.audioA;
@@ -1494,6 +1604,12 @@ const app = {
     },
 
     commonPlayUpdates: (song) => {
+        // Clear RPC momentarily to create a visual "stop and start" effect
+        // Removed to prevent flickering/unloading issues
+        // if (app.settings.discordRpc) {
+        //    window.electronAPI.clearDiscordActivity();
+        // }
+
         app.updatePlayerUI(song);
         app.updateMediaSession(song);
         app.updateDiscordRPC(song);
@@ -1706,11 +1822,50 @@ const app = {
     },
 
     updateDiscordRPC: (song) => {
-        if (!song) return;
-        if (app.settings && !app.settings.discordRpc) return;
+        if (!song || (app.settings && !app.settings.discordRpc) || !app.isPlaying) {
+            window.electronAPI.clearDiscordActivity();
+            return;
+        }
+
+        let largeImageKey = 'modsic_logo';
+        let largeImageText = song.album || 'Moadify';
+
+        // Initialize cache if needed
+        if (!app.rpcCoverCache) app.rpcCoverCache = new Map();
+
+        // Discord RPC only supports http(s) URLs or asset keys. Data URIs (base64) are not supported.
+        if (song.cover && song.cover.startsWith('http')) {
+            largeImageKey = song.cover;
+        } else {
+            // Local file. Check cache.
+            const cacheKey = `${song.title}:${song.artist}`;
+            if (app.rpcCoverCache.has(cacheKey)) {
+                const cached = app.rpcCoverCache.get(cacheKey);
+                // If we have a cached URL (or 'modsic_logo' which is a string), use it.
+                // If cached is null (fetching in progress), we use default 'modsic_logo'.
+                if (cached) largeImageKey = cached;
+            } else {
+                // Not in cache. Mark as fetching (null) so we don't spam requests.
+                app.rpcCoverCache.set(cacheKey, null);
+
+                window.electronAPI.fetchOnlineCover(`${song.artist} ${song.title}`).then(url => {
+                    const finalUrl = url || 'modsic_logo';
+                    app.rpcCoverCache.set(cacheKey, finalUrl);
+
+                    // If still playing the same song, update RPC immediately
+                    const currentSong = app.queue[app.currentIndex];
+                    if (currentSong && currentSong.id === song.id && url) {
+                        app.updateDiscordRPC(currentSong);
+                    }
+                });
+            }
+        }
+
         window.electronAPI.setDiscordActivity({
-            details: `Listening to ${song.title}`,
+            details: song.title,
             state: `By ${song.artist}`,
+            largeImageKey: largeImageKey,
+            largeImageText: largeImageText
         });
     },
 
@@ -1731,7 +1886,8 @@ const app = {
         debugLogs: false,
         fileSync: false,
         customTitleBar: true,
-        middleClick: true
+        middleClick: true,
+        autoTag: false
     },
 
     setupSettings: () => {
@@ -1776,11 +1932,11 @@ const app = {
         const compactToggle = document.getElementById('compact-mode-toggle');
         if (compactToggle) {
             compactToggle.checked = app.settings.compactMode;
-            if (app.settings.compactMode) document.body.classList.add('compact-mode');
+            if (app.settings.compactMode) document.body.classList.add('compact');
             compactToggle.addEventListener('change', async (e) => {
                 app.settings.compactMode = e.target.checked;
-                if (app.settings.compactMode) document.body.classList.add('compact-mode');
-                else document.body.classList.remove('compact-mode');
+                if (app.settings.compactMode) document.body.classList.add('compact');
+                else document.body.classList.remove('compact');
                 await window.electronAPI.saveSettings(app.settings);
             });
         }
@@ -1952,6 +2108,86 @@ const app = {
 
         bindToggle('media-keys-toggle', 'mediaKeys');
         bindToggle('middle-click-toggle', 'middleClick');
+        // Auto-Tag & Batch Scan
+        bindToggle('auto-tag-toggle', 'autoTag');
+
+        const runAutoFillBtn = document.getElementById('run-auto-fill-btn');
+        if (runAutoFillBtn) {
+            runAutoFillBtn.addEventListener('click', async () => {
+                const candidates = app.library.filter(song => {
+                    return (song.title === 'Unknown Title' ||
+                        song.artist === 'Unknown Artist' ||
+                        song.album === 'Unknown Album' ||
+                        !song.cover);
+                });
+
+                if (candidates.length === 0) {
+                    await CustomModal.alert("No songs with missing information found in library.");
+                    return;
+                }
+
+                if (await CustomModal.confirm(`Found ${candidates.length} songs with missing info. Scan online to auto-fill? This may take a while.`)) {
+                    runAutoFillBtn.disabled = true;
+                    runAutoFillBtn.textContent = "Scanning...";
+
+                    let updatedCount = 0;
+                    const total = candidates.length;
+
+                    try {
+                        for (let i = 0; i < total; i++) {
+                            const song = candidates[i];
+                            // Update button text to show progress
+                            runAutoFillBtn.textContent = `Scanning ${i + 1}/${total}...`;
+
+                            let query = '';
+                            if (song.artist !== 'Unknown Artist' && song.title !== 'Unknown Title') {
+                                query = `${song.artist} ${song.title}`;
+                            } else {
+                                // Extract from path if available
+                                if (song.path) {
+                                    query = song.path.split(/[\\/]/).pop().replace(/\.[^/.]+$/, "").replace(/_/g, ' ');
+                                }
+                            }
+
+                            if (query) {
+                                const data = await window.electronAPI.fetchOnlineMetadata(query);
+                                if (data) {
+                                    let changed = false;
+
+                                    // Update logic (Aggressive fill for 'Unknown', preservative for existing)
+                                    if (song.album === 'Unknown Album' && data.album) { song.album = data.album; changed = true; }
+                                    if (song.artist === 'Unknown Artist' && data.artist) { song.artist = data.artist; changed = true; }
+                                    if (song.title === 'Unknown Title' && data.title) { song.title = data.title; changed = true; }
+
+                                    // Cover: Only if missing
+                                    if (!song.cover && data.cover) { song.cover = data.cover; changed = true; }
+
+                                    if (changed) updatedCount++;
+                                }
+                            }
+
+                            // Small delay to be polite to the API
+                            await new Promise(r => setTimeout(r, 200));
+                        }
+
+                        if (updatedCount > 0) {
+                            await window.electronAPI.saveLibrary(app.library);
+                            app.renderLibrary(); // Refresh UI if needed
+                            await CustomModal.alert(`Scan complete. Updated ${updatedCount} songs.`);
+                        } else {
+                            await CustomModal.alert("Scan complete. No matching data found.");
+                        }
+
+                    } catch (e) {
+                        console.error(e);
+                        await CustomModal.alert("An error occurred during scanning.");
+                    } finally {
+                        runAutoFillBtn.disabled = false;
+                        runAutoFillBtn.textContent = "Scan Now";
+                    }
+                }
+            });
+        }
 
         // Developer Mode Logic
         const debugToggle = document.getElementById('debug-logs-toggle');
@@ -2034,6 +2270,17 @@ const app = {
                 autoToggle.checked = enabled;
                 autoToggle.addEventListener('change', (e) => {
                     window.electronAPI.toggleAutoUpdate(e.target.checked);
+                });
+            }
+        });
+
+        // Init Auto-Check Toggle
+        const autoCheckToggle = document.getElementById('auto-check-update-toggle');
+        window.electronAPI.getAutoCheckUpdateStatus().then(enabled => {
+            if (autoCheckToggle) {
+                autoCheckToggle.checked = enabled;
+                autoCheckToggle.addEventListener('change', (e) => {
+                    window.electronAPI.toggleAutoCheckUpdate(e.target.checked);
                 });
             }
         });

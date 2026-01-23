@@ -330,6 +330,19 @@
                                 <span class="slider round"></span>
                             </label>
                         </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Auto-Fill</div>
+                                <div class="setting-desc">Automatically fetch metadata for unknown songs</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <button id="run-auto-fill-btn" class="secondary-btn small">Scan Now</button>
+                                <label class="switch">
+                                    <input type="checkbox" id="auto-tag-toggle">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -407,6 +420,16 @@
                                 <div class="setting-desc" id="settings-version-display">Checking...</div>
                             </div>
                             <button id="check-for-updates-btn" class="secondary-btn small">Check for updates</button>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-info">
+                                <div class="setting-name">Auto-check for Updates</div>
+                                <div class="setting-desc">Check for updates when the app starts</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="auto-check-update-toggle" checked>
+                                <span class="slider round"></span>
+                            </label>
                         </div>
                         <div class="setting-row">
                             <div class="setting-info">
@@ -571,6 +594,8 @@
                 </div>
             </div>
             <div class="modal-actions">
+                <button id="auto-fill-btn" class="secondary-btn" title="Auto-fill missing info">Auto-Fill</button>
+                <div style="flex:1"></div>
                 <button id="cancel-edit-btn" class="secondary-btn">Cancel</button>
                 <button id="save-edit-btn" class="primary-btn">Save</button>
             </div>

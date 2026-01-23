@@ -27,6 +27,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // Discord RPC
     setDiscordActivity: (activity) => ipcRenderer.send('discord-set-activity', activity),
+    clearDiscordActivity: () => ipcRenderer.send('discord-clear-activity'),
+    fetchOnlineCover: (query) => ipcRenderer.invoke('fetch-online-cover', query),
+    fetchOnlineMetadata: (query) => ipcRenderer.invoke('fetch-online-metadata', query),
 
     // Media Key Listeners
     onPlayPause: (callback) => ipcRenderer.on('media-play-pause', callback),
@@ -58,6 +61,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     quitAndInstall: () => ipcRenderer.send('quit-and-install'),
     getAutoUpdateStatus: () => ipcRenderer.invoke('get-auto-update-setting'),
     toggleAutoUpdate: (enable) => ipcRenderer.send('set-auto-update-setting', enable),
+    getAutoCheckUpdateStatus: () => ipcRenderer.invoke('get-auto-check-update-setting'),
+    toggleAutoCheckUpdate: (enable) => ipcRenderer.send('set-auto-check-update-setting', enable),
 
     onUpdateStatus: (callback) => ipcRenderer.on('update-status', (event, data) => callback(data)),
     onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (event, data) => callback(data)),

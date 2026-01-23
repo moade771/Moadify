@@ -587,6 +587,57 @@ if (!window.electronAPI) {
             });
         },
 
+        // Window Controls
+        setWindowSize: () => { },
+        setAlwaysOnTopFn: () => { },
+        setAlwaysOnTopSetting: () => Promise.resolve(false),
+        getAlwaysOnTopSetting: () => Promise.resolve(false),
+
+        // Auto-Start
+        toggleAutostart: () => Promise.resolve(false),
+        getAutostartStatus: () => Promise.resolve(false),
+
+        // Advanced
+        openConfigFolder: () => { console.log('Config folder not available in browser'); },
+        resetApp: async () => {
+            try {
+                const db = await openDB();
+                const tx = db.transaction(['library', 'playlists', 'history'], 'readwrite');
+                tx.objectStore('library').clear();
+                tx.objectStore('playlists').clear();
+                tx.objectStore('history').clear();
+                window.location.reload();
+            } catch (e) {
+                console.error("Error resetting app", e);
+            }
+        },
+        setDebugMode: () => { },
+
+        // File Sync
+        toggleFileSync: () => Promise.resolve(false),
+        getFileSyncStatus: () => Promise.resolve(false),
+        onLibraryUpdated: () => { },
+
+        // Auto-Updater
+        checkForUpdates: () => { },
+        downloadUpdate: () => { },
+        quitAndInstall: () => { },
+        getAutoUpdateStatus: () => Promise.resolve(false),
+        toggleAutoUpdate: () => { },
+        onUpdateStatus: () => { },
+        onUpdateProgress: () => { },
+
+        // Version
+        getVersion: () => Promise.resolve('0.8.0-web'),
+
+        // Downloads (Mock)
+        onDownloadStarted: () => { },
+        onDownloadProgress: () => { },
+        onDownloadComplete: () => { },
+
+        // Other Missing
+        selectFolder: () => Promise.resolve(null),
+
         setDiscordActivity: () => { },
         onPlayPause: () => { },
         onNextTrack: () => { },

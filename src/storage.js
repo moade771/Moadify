@@ -7,7 +7,9 @@ class Storage {
         this.libraryPath = path.join(userDataPath, 'library.json');
         this.playlistsPath = path.join(userDataPath, 'playlists.json');
         this.settingsPath = path.join(userDataPath, 'settings.json');
+
         this.historyPath = path.join(userDataPath, 'history.json');
+        this.coverCachePath = path.join(userDataPath, 'cover-cache.json');
 
         this.init();
     }
@@ -16,7 +18,9 @@ class Storage {
         if (!fs.existsSync(this.libraryPath)) fs.writeFileSync(this.libraryPath, JSON.stringify([]));
         if (!fs.existsSync(this.playlistsPath)) fs.writeFileSync(this.playlistsPath, JSON.stringify([]));
         if (!fs.existsSync(this.settingsPath)) fs.writeFileSync(this.settingsPath, JSON.stringify({}));
+
         if (!fs.existsSync(this.historyPath)) fs.writeFileSync(this.historyPath, JSON.stringify([]));
+        if (!fs.existsSync(this.coverCachePath)) fs.writeFileSync(this.coverCachePath, JSON.stringify({}));
     }
 
     async getLibrary() {
@@ -78,6 +82,19 @@ class Storage {
 
     async saveHistory(data) {
         await fs.promises.writeFile(this.historyPath, JSON.stringify(data, null, 2));
+    }
+
+    async getCoverCache() {
+        try {
+            const data = await fs.promises.readFile(this.coverCachePath, 'utf-8');
+            return JSON.parse(data);
+        } catch (e) {
+            return {};
+        }
+    }
+
+    async saveCoverCache(data) {
+        await fs.promises.writeFile(this.coverCachePath, JSON.stringify(data, null, 2));
     }
 }
 
