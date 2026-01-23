@@ -4,7 +4,7 @@
 
 # Moadify
 
-A simple open source music player for windows. With user friendly interface and a lot of other features
+An open source music player for windows. With user friendly interface and a lot of other features
 
 
 ## Installation
